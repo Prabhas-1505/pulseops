@@ -71,7 +71,12 @@ services:
     image: redis:7-alpine
     container_name: pulseops-redis
     ports:
-      - "6379:6379"
+      # Host port deliberately not 6379: this machine already runs a native
+      # Redis on 127.0.0.1:6379 (a Celery broker for an unrelated project --
+      # same category of collision as Postgres, see docs/DECISIONS.md) which
+      # silently intercepts connections meant for this container. In-network
+      # traffic (api -> redis:6379) is unaffected either way.
+      - "${REDIS_HOST_PORT:-63790}:6379"
     volumes:
       - redis-data:/data
     healthcheck:

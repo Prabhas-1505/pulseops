@@ -126,6 +126,21 @@ traffic (`processor` -> `postgres:5432`) was never affected, since
 container-to-container DNS resolution doesn't go through the host network
 stack at all.
 
+## 2026-10-14 — Redis host port 6379 collides with a pre-existing native install
+
+**Discovered, not anticipated** (same category as the Postgres collision
+above, found while writing Phase 5's API integration tests): this machine
+also runs a native Redis on `127.0.0.1:6379` (a Celery broker for an
+unrelated project -- `redis-cli KEYS '*'` showed `_kombu.binding.celery`
+and `cache:*` keys, nothing PulseOps ever wrote). A host-side test script
+clearing its own rate-limit keys between runs connected to this native
+Redis instead of the Dockerized one, found no matching keys, and silently
+did nothing -- the next run then hit a real but confusing 401-via-429
+collision from the *previous* run's leftover rate-limit counter. Fixed the
+same way as Postgres: moved the host-side mapping to
+`${REDIS_HOST_PORT:-63790}:6379` in `docker-compose.yml`. In-network
+traffic (`api` -> `redis:6379`) was never affected.
+
 ## 2026-10-14 — `RETURNING` instead of `cursor.rowcount` for insert counts
 
 The processor logs how many of a batch's events were newly inserted vs.

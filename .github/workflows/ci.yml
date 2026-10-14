@@ -1,11 +1,4 @@
-name: CI (Phase 1)
-
-# NOTE: this workflow mirrors the exact commands verified manually during
-# Phase 1 development (see docs/ARCHITECTURE.md for the local transcript),
-# but has not yet been executed on GitHub's infrastructure -- there has been
-# no push to a GitHub remote for this repo yet. Treat "CI configured" and
-# "CI has passed on GitHub Actions" as separate claims until this actually
-# runs there once.
+name: CI
 
 on:
   push:
@@ -14,7 +7,7 @@ on:
     branches: [main]
 
 jobs:
-  phase1-smoke:
+  full-stack:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,22 +17,38 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install smoke test client deps
-        run: pip install -r kafka/requirements.txt
+      - name: Install test client deps
+        run: |
+          pip install -r kafka/requirements.txt
+          pip install -r processor/requirements.txt
+          pip install pytest redis==8.1.0
 
       - name: Validate docker-compose config
         run: |
           cp .env.example .env
           docker compose config -q
 
-      - name: Build and start the stack
-        run: docker compose up -d --build
+      - name: Build and start the full stack
+        run: |
+          # No separate "wait for kafka-init" step: otel-collector depends
+          # on it via `service_completed_successfully`, so `up` already
+          # blocks until kafka-init (and everything else) is ready.
+          docker compose up -d --build
 
-      - name: Wait for topic creation to finish
-        run: docker compose wait kafka-init
-
-      - name: Run Phase 1 smoke test
+      - name: Phase 1 -- Kafka/OTel ingestion smoke test
         run: python kafka/smoke_test.py
+
+      - name: Phase 2 -- recovery tests (replay dedup, DLQ, DB-outage retry)
+        run: python tests/phase2/recovery_test.py
+
+      - name: Phase 3 -- deterministic unit tests (rules + correlation)
+        run: python -m pytest tests/phase3/test_rules.py tests/phase3/test_correlate.py -v
+
+      - name: Phase 3 -- live fault-injection evaluation harness
+        run: python tests/phase3/evaluation.py
+
+      - name: Phase 4 -- management API integration tests
+        run: python tests/phase4/api_test.py
 
       - name: Dump logs on failure
         if: failure()
