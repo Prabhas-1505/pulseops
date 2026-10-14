@@ -1,4 +1,4 @@
-# Architecture — Phase 1
+# Architecture — Phase 1 & 2
 
 ## Components
 
@@ -6,12 +6,59 @@
 |---|---|---|
 | `kafka` | Single-node Kafka in KRaft combined mode (broker+controller) | `apache/kafka:4.2.2` |
 | `kafka-init` | One-shot container that creates `otel.raw.v1` (3 partitions) and `otel.dlq.v1` (1 partition), then exits | `apache/kafka:4.2.2` |
-| `postgres` | Relational store, provisioned but unused until Phase 2 | `postgres:16-alpine` |
+| `postgres` | Relational store. Host port `55432` (see `docs/DECISIONS.md`) | `postgres:16-alpine` |
 | `redis` | Cache/rate-limit store, provisioned but unused until Phase 4 | `redis:7-alpine` |
 | `otel-collector` | OTLP receiver -> batch -> Kafka exporter | `otel/opentelemetry-collector-contrib:0.162.0` |
 | `payments` | Innermost demo service; applies fault injection; "charges" an order | FastAPI, this repo |
 | `orders` | Calls `payments`; applies fault injection; creates an order | FastAPI, this repo |
 | `gateway` | Public entrypoint; calls `orders`; applies fault injection | FastAPI, this repo |
+| `migrate` | One-shot `alembic upgrade head` against Postgres, then exits | this repo (`processor/Dockerfile`) |
+| `processor` | Durable Kafka consumer group (`pulseops-event-normalizer`): decode -> validate -> idempotent upsert into Postgres, DLQ on malformed input | this repo (`processor/`) |
+
+## Phase 2: normalized event schema and persistence
+
+`processor/schema.py` defines `NormalizedEvent` (schema_version=1): a
+pydantic model with `event_id`, `service`, `event_timestamp`, `trace_id`,
+`span_id`, `parent_span_id`, `event_type`, `duration_ms`, `status`,
+`severity`, `attributes`. `normalize_span()` converts a `DecodedSpan` (the
+same OTLP-JSON decoder from Phase 1, now shared at
+`services/common/otlp_json.py`) into this schema, computing `duration_ms`
+from the span's start/end unix-nano timestamps, mapping OTel's
+`STATUS_CODE_*` to a plain `status` string, and deriving a simple
+`severity` (`"error"` if status is `ERROR`, else `"info"` — this is a label,
+not the anomaly detection itself, which is Phase 3's job). Blank
+trace/span IDs or an end-before-start timestamp raise `NormalizationError`
+rather than being silently coerced.
+
+`processor/models.py` + the Alembic migration in
+`processor/migrations/versions/` create the Postgres `events` table.
+`event_id = "{trace_id}:{span_id}"` is a unique, deterministic column — the
+idempotency key described below.
+
+## Phase 2: idempotent consumer, retry, and dead-lettering
+
+`processor/consumer.py` runs consumer group `pulseops-event-normalizer`
+against `otel.raw.v1` with `enable.auto.commit: False`. Per message:
+
+1. Decode the OTLP-JSON payload and normalize every span in it. On
+   `json.JSONDecodeError` / `NormalizationError` / similar: produce the
+   **original raw bytes** plus a reason header to `otel.dlq.v1`, commit the
+   offset, and move on — a malformed message cannot block the partition.
+2. Otherwise, bulk upsert via
+   `INSERT ... ON CONFLICT (event_id) DO NOTHING RETURNING id`, wrapped in a
+   `tenacity` retry (5 attempts, exponential backoff capped at 10s) that
+   only triggers on `sqlalchemy.exc.OperationalError` (transient DB
+   connectivity issues). The insert count is derived by counting
+   `RETURNING` rows, not `cursor.rowcount` (see `docs/DECISIONS.md` for why).
+3. Only commit the Kafka offset after step 2 succeeds. If retries are
+   exhausted, the exception propagates and the process exits — the
+   container's `restart: unless-stopped` policy brings it back, and it
+   resumes from the last *committed* offset, so a DB outage delays an event
+   rather than losing it.
+
+This gives at-least-once delivery from Kafka's side, made safe by
+application-level idempotency (the `event_id` unique constraint), not by
+any Kafka exactly-once transaction machinery.
 
 ## Request path
 
@@ -43,9 +90,8 @@ Each service's `TracerProvider` (`services/common/telemetry.py`) exports via
    15s max, 60s max elapsed) to survive a momentarily-unavailable broker —
    this is delivery-retry, not payload dead-lettering.
 
-`otel.dlq.v1` exists in Kafka but nothing writes to it yet; it's reserved for
-the Phase 2 stream processor to use when it encounters a malformed/invalid
-raw-telemetry message.
+As of Phase 2, `otel.dlq.v1` is actively written to by `processor/` (not the
+collector) whenever a raw-telemetry message fails to decode or validate.
 
 ## Fault injection design
 
@@ -102,6 +148,63 @@ All 7 checks passed.
 
 Also run via `pytest tests/phase1/test_smoke.py -v`: `1 passed in 25.70s`.
 
+### Phase 2: a real request lands in Postgres, correctly normalized
+
+```
+$ curl -X POST localhost:8000/checkout -d '{"item":"phase2-verify","amount_cents":777}'
+{"request_id":"req_d55514d3c1ab40b5","order_id":"ord_da09aff3d674414f","charge_id":"chg_5d8b3c14d48445bf","status":"confirmed"}
+
+$ psql ... -c "SELECT service, event_type, status, severity, duration_ms, ... FROM events WHERE ..."
+ service  |         event_type          | status | severity | duration_ms
+----------+-----------------------------+--------+----------+-------------
+ gateway  | POST /checkout              | UNSET  | info     |       60.53
+ gateway  | POST /checkout http receive | UNSET  | info     |        0.26
+ gateway  | POST                        | UNSET  | info     |       40.32
+ orders   | POST /orders                | UNSET  | info     |       28.20
+ payments | POST /charge                | UNSET  | info     |        3.66
+ ... (14 rows total per request -- FastAPIInstrumentor/HTTPXClientInstrumentor
+      emit several ASGI/client sub-spans per business call, not just one)
+```
+
+### Phase 2 recovery tests (`python tests/phase2/recovery_test.py`, 13/13 passing)
+
+```
+=== Scenario 1: consumer replay does not duplicate events ===
+rows before replay: 108
+PASS: consumer group offsets reset to earliest
+PASS: processor drained the replayed backlog
+PASS: replayed backlog was actually reprocessed and deduped (not just skipped) -- processor logged 108 duplicates since replay restart, expected 108
+PASS: row count unchanged after full topic replay -- before=108 after=108
+
+=== Scenario 2: malformed message is dead-lettered, not dropped or blocking ===
+PASS: processor settled (caught up) before injecting the poison pill
+PASS: malformed message landed on DLQ topic with original bytes intact
+PASS: consumer group lag still drains after the poison pill (partition not blocked)
+
+=== Scenario 3: Postgres outage is retried, not silently dropped ===
+PASS: checkout still succeeds at the HTTP layer while DB is down -- got 200
+PASS: processor restarted (crash-and-retry) rather than hanging forever -- RestartCount=2
+PASS: event eventually persisted after Postgres recovers (no data loss)
+PASS: every span for this request has a unique event_id (no duplicate rows at this point) -- total=14 distinct=14
+PASS: span count for this trace is stable after settling (no late duplicate inserts from the crash-retry cycle)
+PASS: overall row count only grew by this request's own spans, nothing duplicated -- before=108 after=122 this_trace_spans=14
+
+All 13 checks passed.
+```
+
+Also run via `pytest tests/phase2/test_recovery.py -v`: `1 passed in 61.30s`.
+
+Scenario 1's "replayed and deduped" check is itself a story about a bug
+caught mid-build: a first version compared `cursor.rowcount` and log output
+captured via `subprocess`'s `.stdout` only, both of which looked like
+failures (`rowcount` reported `-1`; `.stdout` was empty because Python's
+`logging` module writes to stderr by default and `docker logs` keeps
+stdout/stderr as separate streams). Neither was a real correctness bug —
+`SELECT count(*), count(DISTINCT event_id)` against Postgres confirmed no
+duplicates existed the whole time — but both were real bugs in how this
+test *observed* correctness, fixed before trusting the result. See
+`docs/DECISIONS.md` for both.
+
 ### Fault injection scenarios verified manually (all four required patterns)
 
 ```
@@ -120,14 +223,22 @@ Combined with the smoke test's outage check and ordinary `/checkout` calls,
 this covers all four traffic patterns required by Phase 1: normal, 5xx
 spike, increased latency, and downstream outage.
 
-## Known Phase 1 limitations (stated up front, not discovered later)
+## Known limitations (stated up front, not discovered later)
 
 - `/admin/faults` has no auth. It's an internal dev/test control surface;
   Phase 4's management API is where real authenticated control belongs.
 - No container-level healthcheck on `otel-collector` (distroless image, no
   shell/wget — see `docs/DECISIONS.md`).
-- The smoke test's Kafka consumer group is throwaway and single-run; it does
-  not exercise consumer-group rebalancing, offset commits, or replay — that
-  is Phase 2 scope (durable processor) and will get its own tests.
 - Single Kafka broker, single partition replication factor 1: fine for local
   dev, explicitly not a multi-broker durability story.
+- The processor is a single instance (one consumer group member). It never
+  needed to prove multi-consumer partition rebalancing, only restart/replay
+  recovery. Scaling to multiple processor replicas is unexercised.
+- `severity` is a simple status-code-derived label (`"error"` vs `"info"`),
+  not anomaly detection. Sliding-window error rates, EWMA baselines, and
+  explainable thresholds are Phase 3 scope and don't exist yet — don't read
+  `severity` as "this is already doing anomaly detection."
+- The DB-outage recovery test (`tests/phase2/recovery_test.py`) exercises
+  one processor instance crash-restarting against one stopped-then-restarted
+  Postgres. It does not exercise Postgres data corruption, split-brain, or
+  multi-replica coordination during the outage.

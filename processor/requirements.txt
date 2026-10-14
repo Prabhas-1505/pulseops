@@ -1,0 +1,8 @@
+# Frozen via: python3.11 -m venv .venv && pip install <deps> && pip freeze
+# on 2026-10-14. Re-freeze with the same command if you need to bump versions.
+confluent-kafka==2.16.0
+pydantic==2.14.1
+SQLAlchemy==2.1.4
+psycopg[binary]==3.3.6
+alembic==1.20.0
+tenacity==9.2.1

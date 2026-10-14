@@ -1,10 +1,13 @@
 """Minimal decoder for the OTLP-JSON encoding produced by the collector's kafkaexporter.
 
 OTLP JSON follows the protobuf canonical JSON mapping: camelCase field names,
-bytes fields (trace/span IDs) as base64 strings, oneof typed values as
+int64 fields (unix-nano timestamps) as decimal strings, oneof typed values as
 `{"stringValue": ...}` / `{"intValue": ...}` / etc. This module walks that
 structure without depending on the generated OTLP protobuf classes, since the
 collector already guarantees the shape as long as `encoding: otlp_json` is set.
+
+Shared by the Phase 1 smoke test and the Phase 2 stream processor -- both
+consume the same `otel.raw.v1` topic and need the same decode logic.
 """
 
 from __future__ import annotations
@@ -36,6 +39,8 @@ class DecodedSpan:
     parent_span_id: str | None
     name: str
     status_code: str
+    start_time_unix_nano: int
+    end_time_unix_nano: int
     attributes: dict = field(default_factory=dict)
 
 
@@ -54,5 +59,7 @@ def iter_spans(export_trace_service_request: dict):
                     parent_span_id=span.get("parentSpanId"),
                     name=span.get("name", ""),
                     status_code=status.get("code", "STATUS_CODE_UNSET"),
+                    start_time_unix_nano=int(span.get("startTimeUnixNano", 0)),
+                    end_time_unix_nano=int(span.get("endTimeUnixNano", 0)),
                     attributes=_attrs_to_dict(span.get("attributes", [])),
                 )

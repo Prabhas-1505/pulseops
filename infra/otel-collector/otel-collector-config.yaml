@@ -33,6 +33,7 @@ exporters:
   kafka:
     brokers:
       - kafka:19092
+    partition_traces_by_id: true
     traces:
       topic: otel.raw.v1
       encoding: otlp_json

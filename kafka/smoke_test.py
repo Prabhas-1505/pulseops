@@ -24,11 +24,13 @@ import os
 import sys
 import time
 import uuid
+from pathlib import Path
 
 import httpx
 from confluent_kafka import Consumer, KafkaException
 
-from otlp_json import iter_spans
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from services.common.otlp_json import iter_spans
 
 GATEWAY_URL = os.environ.get("GATEWAY_URL", "http://localhost:8000")
 PAYMENTS_URL = os.environ.get("PAYMENTS_URL", "http://localhost:8002")

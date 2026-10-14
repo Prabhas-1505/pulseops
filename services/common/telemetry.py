@@ -20,5 +20,8 @@ def setup_telemetry(app: FastAPI, service_name: str) -> None:
     provider.add_span_processor(BatchSpanProcessor(exporter))
     trace.set_tracer_provider(provider)
 
-    FastAPIInstrumentor.instrument_app(app, tracer_provider=provider)
+    # Exclude /health: Docker polls it every 10s per service, and with no
+    # business content it's pure noise that would otherwise flood Kafka and
+    # (from Phase 2 on) Postgres with meaningless rows forever.
+    FastAPIInstrumentor.instrument_app(app, tracer_provider=provider, excluded_urls="/health")
     HTTPXClientInstrumentor().instrument(tracer_provider=provider)

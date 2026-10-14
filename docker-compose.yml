@@ -53,7 +53,11 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-in-local-env}
       POSTGRES_DB: ${POSTGRES_DB:-pulseops}
     ports:
-      - "5432:5432"
+      # Host port deliberately not 5432: this machine already runs a native
+      # Postgres on 127.0.0.1:5432 (see docs/DECISIONS.md) which silently
+      # intercepts connections meant for this container. In-network traffic
+      # (processor -> postgres:5432) is unaffected either way.
+      - "${POSTGRES_HOST_PORT:-55432}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -75,6 +79,46 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    networks: [pulseops]
+
+  migrate:
+    build:
+      context: .
+      dockerfile: processor/Dockerfile
+    container_name: pulseops-migrate
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-pulseops}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-in-local-env}
+      POSTGRES_DB: ${POSTGRES_DB:-pulseops}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [pulseops]
+
+  processor:
+    build:
+      context: .
+      dockerfile: processor/Dockerfile
+    container_name: pulseops-processor
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-pulseops}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-in-local-env}
+      POSTGRES_DB: ${POSTGRES_DB:-pulseops}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+      KAFKA_RAW_TELEMETRY_TOPIC: ${KAFKA_RAW_TELEMETRY_TOPIC:-otel.raw.v1}
+      KAFKA_DLQ_TOPIC: ${KAFKA_DLQ_TOPIC:-otel.dlq.v1}
+      KAFKA_CONSUMER_GROUP: pulseops-event-normalizer
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      kafka-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
     networks: [pulseops]
 
   otel-collector:
