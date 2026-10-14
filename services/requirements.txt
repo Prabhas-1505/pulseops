@@ -1,0 +1,10 @@
+# Frozen via: python3.11 -m venv .venv && pip install <deps> && pip freeze
+# on 2026-10-14. Re-freeze with the same command if you need to bump versions.
+fastapi==0.143.0
+uvicorn[standard]==0.54.0
+httpx==0.28.1
+pydantic==2.14.1
+opentelemetry-sdk==1.45.1
+opentelemetry-exporter-otlp-proto-grpc==1.45.1
+opentelemetry-instrumentation-fastapi==0.66b1
+opentelemetry-instrumentation-httpx==0.66b1

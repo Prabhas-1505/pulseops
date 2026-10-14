@@ -1,0 +1,65 @@
+# PulseOps OTel Collector config (Phase 1)
+#
+# Path: OTLP (gRPC/HTTP) from the three demo services -> batch/retry/queue ->
+# Kafka topic `otel.raw.v1`, encoded as OTLP JSON.
+#
+# NOTE on the DLQ topic (`otel.dlq.v1`): it is created in Kafka infra (see
+# docker-compose.yml / kafka-init) but is NOT written to by this collector.
+# The kafkaexporter's retry_on_failure only protects against transient Kafka
+# unavailability (collector-to-broker delivery), it is not a payload-level
+# dead-letter mechanism. Application-level dead-lettering of malformed or
+# invalid events into otel.dlq.v1 is implemented by the Phase 2 stream
+# processor, which reads otel.raw.v1 and decides per-message validity.
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 400
+    spike_limit_mib: 100
+  batch:
+    send_batch_size: 512
+    send_batch_max_size: 1024
+    timeout: 2s
+
+exporters:
+  kafka:
+    brokers:
+      - kafka:19092
+    traces:
+      topic: otel.raw.v1
+      encoding: otlp_json
+    producer:
+      required_acks: 1
+      compression: gzip
+      max_message_bytes: 2000000
+    retry_on_failure:
+      enabled: true
+      initial_interval: 1s
+      max_interval: 15s
+      max_elapsed_time: 60s
+    timeout: 5s
+  debug:
+    verbosity: basic
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+service:
+  extensions: [health_check]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [kafka, debug]
+  telemetry:
+    logs:
+      level: info

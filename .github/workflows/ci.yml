@@ -1,0 +1,50 @@
+name: CI (Phase 1)
+
+# NOTE: this workflow mirrors the exact commands verified manually during
+# Phase 1 development (see docs/ARCHITECTURE.md for the local transcript),
+# but has not yet been executed on GitHub's infrastructure -- there has been
+# no push to a GitHub remote for this repo yet. Treat "CI configured" and
+# "CI has passed on GitHub Actions" as separate claims until this actually
+# runs there once.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  phase1-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install smoke test client deps
+        run: pip install -r kafka/requirements.txt
+
+      - name: Validate docker-compose config
+        run: |
+          cp .env.example .env
+          docker compose config -q
+
+      - name: Build and start the stack
+        run: docker compose up -d --build
+
+      - name: Wait for topic creation to finish
+        run: docker compose wait kafka-init
+
+      - name: Run Phase 1 smoke test
+        run: python kafka/smoke_test.py
+
+      - name: Dump logs on failure
+        if: failure()
+        run: docker compose logs
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
