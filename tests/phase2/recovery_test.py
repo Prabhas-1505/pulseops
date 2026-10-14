@@ -109,6 +109,16 @@ def consumer_group_total_lag(group: str) -> int | None:
 
 def scenario_replay_does_not_duplicate() -> None:
     print("\n=== Scenario 1: consumer replay does not duplicate events ===")
+
+    # Must be fully caught up before snapshotting `before` -- otherwise a
+    # message produced just before this scenario started (e.g. by the
+    # Phase 1 smoke test immediately preceding this in CI) could still be
+    # unconsumed, and replaying would then insert it as a genuinely NEW row
+    # rather than a duplicate, which looks identical to a real dedup bug if
+    # you don't rule it out first.
+    settled = wait_until(lambda: consumer_group_total_lag(CONSUMER_GROUP) == 0, timeout_s=30, interval_s=2)
+    check("processor settled (caught up) before snapshotting pre-replay row count", settled)
+
     before = db_count()
     print(f"rows before replay: {before}")
 

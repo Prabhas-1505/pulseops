@@ -16,3 +16,4 @@ htmlcov/
 dashboard/node_modules/
 dashboard/dist/
 *.tsbuildinfo
+load/results/
