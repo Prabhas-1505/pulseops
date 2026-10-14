@@ -8,7 +8,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
-from api.auth import decode_access_token
+from api.auth import decode_access_token, decode_sse_ticket
 from api.models import User
 from services.common.db import build_engine
 
@@ -48,21 +48,24 @@ def client_identity(request: Request) -> str:
 
 
 def get_current_user_sse(
-    token: str | None = None,
-    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
+    ticket: str | None = None,
     db: Session = Depends(get_db),
 ) -> User:
-    """Same as get_current_user, but also accepts the JWT as a `?token=`
-    query param. The browser's native EventSource API cannot set custom
-    headers, so an Authorization header is not an option for SSE -- a
-    query-param token is the standard workaround for this exact limitation.
+    """Auth for the SSE stream via a short-lived, single-purpose `?ticket=`
+    (see `POST /incidents/stream/ticket`), not the general-purpose bearer
+    JWT. The browser's native EventSource API cannot set custom headers, so
+    putting *something* in the URL is unavoidable for SSE -- but a normal
+    30-minute bearer token sitting in a query string is a known exposure
+    (proxy/server access logs, browser history, Referer headers). A 60s
+    ticket, scoped to this endpoint only and useless after it's been used
+    to open the connection, bounds that exposure to nearly nothing instead
+    of a third of an hour of full API access.
     """
-    raw_token = credentials.credentials if credentials is not None else token
-    if raw_token is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="missing bearer token or ?token=")
-    username = decode_access_token(raw_token)
+    if ticket is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="missing ?ticket=")
+    username = decode_sse_ticket(ticket)
     if username is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid or expired token")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid or expired ticket")
     user = db.query(User).filter(User.username == username).one_or_none()
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="user no longer exists")

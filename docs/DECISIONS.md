@@ -331,6 +331,52 @@ restrict this to the dashboard's actual origin. Flagged here and in
 security review is the right place to revisit it if this were ever
 deployed for real.
 
+## 2026-10-14 — Phase 5 security review: two real findings, both fixed
+
+Ran a security-focused review against the whole codebase (nothing had been
+reviewed before this). Two findings survived false-positive filtering:
+
+1. **Hardcoded default JWT signing secret (High).**
+   `JWT_SECRET_KEY` defaulted to the literal string
+   `change-me-in-local-env`, committed in cleartext in this public repo
+   (`.env.example`, and previously also in `docker-compose.yml`'s
+   fallback). Every JWT the API issues or accepts is signed with this key
+   via HS256 -- anyone who reads the public repo knows the exact signing
+   key any deployment that forgot to override it would be using, and could
+   forge a valid token for any existing username (`get_current_user` only
+   checks that the `sub` claim names a real user, not that the token came
+   from `/auth/login`). Fixed by making `api/auth.py` raise at import time
+   if `JWT_SECRET_KEY` is unset or still equals the placeholder -- the API
+   now refuses to start rather than silently signing tokens with a known
+   key. `docker-compose.yml`'s own fallback default was also the
+   placeholder string, which would have quietly resurrected the same
+   problem if `JWT_SECRET_KEY` weren't set in the environment at all; the
+   fail-fast check in code is what actually closes this, not the compose
+   file default. CI now generates a real secret with `openssl rand -hex
+   32` before bringing the stack up, same as a real deployment must.
+
+2. **Long-lived bearer token in the SSE URL (Medium).**
+   `GET /incidents/stream/live?token=<jwt>` reused the same 30-minute
+   general-purpose API token in a query string, which is a known exposure
+   (proxy/server access logs, browser history, `Referer` headers to any
+   third-party resource the page loads while the tab is open). Browsers'
+   `EventSource` still can't send custom headers, so *something* has to go
+   in the URL -- but it doesn't have to be the real session token. Added a
+   `scope` claim to JWTs (`"api"` vs `"sse"`) and a new endpoint,
+   `POST /incidents/stream/ticket` (normal bearer auth), that issues a
+   60-second, SSE-scoped ticket. `get_current_user_sse` now only accepts
+   `scope=sse` tickets via `?ticket=`; a normal long-lived bearer token
+   presented as a ticket is rejected (verified: `tests/phase4/api_test.py`
+   asserts this explicitly). The dashboard fetches a fresh ticket
+   immediately before every connection attempt, including reconnects. 60s
+   is ample since the ticket is only checked once, at connection handshake
+   time, not re-validated for the stream's ongoing lifetime.
+
+Both fixes verified against the live stack (API, 21/21 integration checks
+including the new ticket-rejection assertion) and in an actual browser
+(dashboard's live SSE badge still works end to end against the new
+ticket flow, zero console/network errors).
+
 ## 2026-10-14 — Project repo separate from home-directory git repo
 
 The user's home directory (`~`) is itself a pre-existing, unrelated git

@@ -23,6 +23,10 @@ class LoginRequest(BaseModel):
 
 class TokenResponse(BaseModel):
     access_token: str
+
+
+class StreamTicketResponse(BaseModel):
+    ticket: str
     token_type: str = "bearer"
 
 

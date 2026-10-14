@@ -90,6 +90,11 @@ export async function summarizeIncident(id: number): Promise<IncidentSummaryAIRe
   return request(`/incidents/${id}/summary`);
 }
 
+export async function getStreamTicket(): Promise<string> {
+  const res = await request<{ ticket: string }>("/incidents/stream/ticket", { method: "POST" });
+  return res.ticket;
+}
+
 export async function getServicesHealth(): Promise<ServiceHealth[]> {
   return request("/services/health");
 }

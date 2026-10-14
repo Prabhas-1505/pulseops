@@ -26,6 +26,10 @@ jobs:
       - name: Validate docker-compose config
         run: |
           cp .env.example .env
+          # The api service refuses to start on the committed placeholder
+          # JWT_SECRET_KEY (see api/auth.py) -- generate a real one for
+          # this run, same as a real deployment must.
+          sed -i "s/^JWT_SECRET_KEY=.*/JWT_SECRET_KEY=$(openssl rand -hex 32)/" .env
           docker compose config -q
 
       - name: Build and start the full stack

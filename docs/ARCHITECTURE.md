@@ -439,6 +439,33 @@ Screenshots were visually inspected (not just text-scraped) at each step;
 the login page and incident-detail views rendered correctly with no
 layout breakage.
 
+### Phase 5: load benchmarks and a CI bug caught by actually running CI
+
+Full methodology, real numbers, and their honest interpretation are in
+`docs/BENCHMARK_RESULTS.md` (throughput/latency/resource usage under a
+30-user Locust run, and consumer-lag growth/drain time when the processor
+is killed mid-load). Headline results: 3,599 requests, 0 failures, 40.2
+req/s, p50 200ms/p99 4.0s on an 8GB/8-core shared dev machine; a 15s
+processor outage under 20-user load peaked at 6,295 messages of lag and
+drained fully 55.4s after restart.
+
+Separately: pushing this project's own CI workflow to GitHub for the
+first time (it had only ever been described as "configured, not yet run"
+through Phase 4) immediately caught two real bugs that local testing never
+would have: `docker compose wait kafka-init` turns out to only work while
+the target container is still running -- by the time a later CI step
+calls it, the one-shot container has already exited, and the command
+errors with `no containers for project "pulseops"` even though
+`docker compose ps -a` shows the container right there. And Phase 2's
+replay-dedup scenario, run back-to-back with no idle gap after Phase 1
+(exactly how CI runs it, unlike manual local testing), exposed that a
+`lag==0` check isn't sufficient proof the processor is caught up -- OTel's
+`BatchSpanProcessor` can still be holding unflushed spans from the
+immediately-preceding test for several seconds, and those stragglers land
+in Kafka during replay and get miscounted as duplicates. Both fixed; see
+`docs/DECISIONS.md` for the full story. This is the exact value "actually
+run CI on GitHub, don't just configure it" was meant to produce.
+
 ## Known limitations (stated up front, not discovered later)
 
 - `/admin/faults` has no auth. It's an internal dev/test control surface;

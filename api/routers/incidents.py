@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from api import schemas
 from api.ai_summary import summarize_incident
+from api.auth import create_sse_ticket
 from api.deps import get_current_user, get_current_user_sse, get_db, get_engine
 from api.models import User
 from api.rate_limit import RateLimiter
@@ -23,9 +24,16 @@ router = APIRouter(
 )
 
 # Separate router: EventSource can't send an Authorization header, so the
-# SSE route authenticates via get_current_user_sse (?token= query param)
-# instead of the bearer-only dependency the rest of this file uses.
+# SSE route authenticates via get_current_user_sse (?ticket= query param, a
+# short-lived single-purpose credential -- see /stream/ticket below and
+# docs/DECISIONS.md) instead of the bearer-only dependency the rest of this
+# file uses.
 stream_router = APIRouter(prefix="/incidents", tags=["incidents"])
+
+
+@router.post("/stream/ticket", response_model=schemas.StreamTicketResponse)
+def issue_stream_ticket(user: User = Depends(get_current_user)) -> schemas.StreamTicketResponse:
+    return schemas.StreamTicketResponse(ticket=create_sse_ticket(user.username))
 
 
 @router.get("", response_model=schemas.PaginatedIncidents)

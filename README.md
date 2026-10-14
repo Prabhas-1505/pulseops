@@ -8,10 +8,10 @@ ingestion, anomaly detection, incident correlation, and an authenticated
 management API + React dashboard. AI is a secondary, optional enrichment
 feature, not the core architecture.
 
-**Status: Phase 4 of 5 complete and verified.** See [Project phases](#project-phases)
-for what exists today vs. what's planned.
+**Status: all 5 phases complete and verified.** See [Project phases](#project-phases)
+for what was built in each.
 
-## Architecture (current: Phase 4)
+## Architecture (current: Phase 5)
 
 ```mermaid
 flowchart LR
@@ -204,20 +204,42 @@ limiting and live SSE updates) to a React `dashboard/`.
   console errors and zero 4xx/5xx network responses. Screenshots were
   inspected, not just text-scraped.
 
-### Not yet implemented
+### Phase 5 -- tests, load benchmarks, CI on GitHub, security review
 
-The React dashboard, authenticated flows, and AI summary above cover all of
-Phase 4's spec requirements. What's left is Phase 5: a full
-unit/integration/e2e test suite beyond what phases 1-4 already have, load
-benchmarks (Locust/k6), a security review, GitHub Actions CI actually
-executed on GitHub's infrastructure (the workflow file exists but has only
-been run locally so far), and final documentation passes. See
-`docs/BENCHMARK_RESULTS.md`, which is intentionally a stub until then.
+- `tests/phase4/api_test.py`: 21 live integration checks against the
+  management API (auth, authorization enforcement, pagination/filtering,
+  incident detail/evidence, acknowledge, rate limiting, and the SSE ticket
+  flow -- including an explicit check that a normal long-lived bearer
+  token is *rejected* if presented as an SSE ticket).
+- `load/`: a real Locust load profile against the gateway's full
+  `checkout -> orders -> payments` chain, a benchmark runner that records
+  actual throughput/latency percentiles, Kafka consumer lag, and
+  per-container CPU/memory, and a dedicated script measuring real lag
+  growth/drain time when the processor is killed mid-load. Real numbers,
+  real methodology, honestly-stated limitations: `docs/BENCHMARK_RESULTS.md`.
+- **CI actually executed on GitHub's infrastructure** -- not just
+  configured. This caught two real bugs no amount of local testing had:
+  `docker compose wait kafka-init` only works on an already-running
+  container (it had exited by the time that step ran, every time, and the
+  command isn't just slow there, it errors); and Phase 2's replay-dedup
+  test needed a stricter "processor is caught up" check for CI's
+  back-to-back timing (a single `lag==0` reading doesn't account for
+  OTel's batch span export delay). Both fixed, both verified, CI is green:
+  https://github.com/Prabhas-1505/pulseops/actions.
+- **Security review**: first review this codebase had. Two real,
+  high-confidence findings, both fixed -- a hardcoded default JWT signing
+  secret (the API now refuses to start on the placeholder value) and a
+  long-lived bearer token sitting in the SSE stream's URL (replaced with a
+  60-second, single-purpose ticket obtained via a new authenticated
+  endpoint). Full writeup: `docs/DECISIONS.md`.
 
 ## Running it
 
 ```bash
 cp .env.example .env
+# Required: the api service refuses to start on the placeholder secret.
+sed -i '' "s/^JWT_SECRET_KEY=.*/JWT_SECRET_KEY=$(openssl rand -hex 32)/" .env  # macOS
+# sed -i "s/^JWT_SECRET_KEY=.*/JWT_SECRET_KEY=$(openssl rand -hex 32)/" .env  # Linux
 docker compose up -d --build
 ```
 
@@ -246,11 +268,11 @@ Check everything is healthy:
 docker compose ps
 ```
 
-### Tests (Phases 1-3)
+### Tests (Phases 1-4)
 
 ```bash
 python3.11 -m venv .venv && source .venv/bin/activate
-pip install -r kafka/requirements.txt -r processor/requirements.txt pytest
+pip install -r kafka/requirements.txt -r processor/requirements.txt pytest redis
 
 python kafka/smoke_test.py               # Phase 1, standalone, prints PASS/FAIL per check
 pytest tests/phase1/test_smoke.py -v     # same, via pytest
@@ -261,14 +283,28 @@ pytest tests/phase2/test_recovery.py -v  # same, via pytest
 pytest tests/phase3/test_rules.py tests/phase3/test_correlate.py -v  # Phase 3, deterministic unit tests (fast, no stack needed)
 python tests/phase3/evaluation.py        # Phase 3, live fault-injection harness (~2 min)
 pytest tests/phase3/test_evaluation.py -v
+
+python tests/phase4/api_test.py          # Phase 4, management API integration tests
+pytest tests/phase4/test_api.py -v
 ```
 
 The Phase 2 recovery tests actively stop/start the `postgres` and
 `processor` containers as part of the scenarios; the Phase 3 evaluation
 harness actively toggles `/admin/faults` on the live `payments` service --
 don't run either against a stack holding data you care about. All of the
-above were actually run against the live stack described here; see the
-commands and output transcribed in `docs/ARCHITECTURE.md`.
+above were actually run against the live stack described here, and on
+GitHub Actions CI (https://github.com/Prabhas-1505/pulseops/actions); see
+the commands and output transcribed in `docs/ARCHITECTURE.md`.
+
+### Load benchmarks
+
+```bash
+pip install -r load/requirements.txt
+python load/run_benchmark.py --users 30 --spawn-rate 10 --run-time 90    # throughput/latency/resource usage
+python load/failure_under_load.py --run-time 60 --outage-at 15 --outage-duration 15  # processor-outage-under-load
+```
+
+Real results from the last run of each: `docs/BENCHMARK_RESULTS.md`.
 
 ### Database migrations
 
@@ -328,10 +364,11 @@ PGPASSWORD=change-me-in-local-env psql -h localhost -p 55432 -U pulseops -d puls
 1. **Infra, demo services, OTel -> Kafka ingestion, smoke test.** Done.
 2. **Normalized event schema, Postgres persistence, idempotent consumer, DLQ wiring, recovery tests.** Done.
 3. **Anomaly detection, incident correlation, fault-injection evaluation harness.** Done.
-4. **Authenticated management API (JWT, rate limiting), React dashboard (SSE), optional AI incident summaries.** Done (this README).
-5. Full test/benchmark suite, CI, security checks, final docs.
+4. **Authenticated management API (JWT, rate limiting), React dashboard (SSE), optional AI incident summaries.** Done.
+5. **Full test/benchmark suite, CI, security checks, final docs.** Done (this README).
 
 See `docs/ARCHITECTURE.md` for component detail and verified run transcripts,
-`docs/DECISIONS.md` for why specific versions/approaches were chosen, and
-`docs/BENCHMARK_RESULTS.md` for the (currently empty) benchmark methodology
-and results template.
+`docs/DECISIONS.md` for why specific versions/approaches were chosen (including
+the full story behind every real bug found while building and testing this),
+and `docs/BENCHMARK_RESULTS.md` for real, measured load-test results and
+their methodology.

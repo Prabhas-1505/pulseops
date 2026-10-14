@@ -133,10 +133,14 @@ def main() -> int:
     check("repeated /auth/login attempts eventually trigger 429", saw_429)
     _clear_login_rate_limit()  # don't leak this into the next test run
 
-    # --- SSE smoke check ---
+    # --- SSE smoke check: short-lived ticket, not the long-lived bearer token ---
+    ticket_resp = httpx.post(f"{API_BASE}/incidents/stream/ticket", headers=headers, timeout=5.0)
+    check("POST /incidents/stream/ticket issues a ticket", ticket_resp.status_code == 200 and "ticket" in ticket_resp.json())
+    ticket = ticket_resp.json().get("ticket", "")
+
     sse_ok = False
     try:
-        with httpx.stream("GET", f"{API_BASE}/incidents/stream/live", params={"token": token}, timeout=10.0) as resp:
+        with httpx.stream("GET", f"{API_BASE}/incidents/stream/live", params={"ticket": ticket}, timeout=10.0) as resp:
             if resp.status_code == 200:
                 for line in resp.iter_lines():
                     if line.startswith("event: snapshot"):
@@ -146,8 +150,14 @@ def main() -> int:
         pass
     check("SSE stream delivers at least one snapshot event", sse_ok)
 
+    sse_long_lived_rejected = httpx.get(f"{API_BASE}/incidents/stream/live", params={"ticket": token}, timeout=5.0)
+    check(
+        "SSE stream rejects a normal long-lived bearer token used as a ticket",
+        sse_long_lived_rejected.status_code == 401,
+    )
+
     sse_unauth = httpx.get(f"{API_BASE}/incidents/stream/live", timeout=5.0)
-    check("SSE stream without a token returns 401", sse_unauth.status_code == 401)
+    check("SSE stream without a ticket returns 401", sse_unauth.status_code == 401)
 
     print("\n--- Summary ---")
     for name, ok, _ in results:
