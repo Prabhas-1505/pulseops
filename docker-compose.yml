@@ -121,6 +121,23 @@ services:
     restart: unless-stopped
     networks: [pulseops]
 
+  detector:
+    build:
+      context: .
+      dockerfile: detector/Dockerfile
+    container_name: pulseops-detector
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-pulseops}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-in-local-env}
+      POSTGRES_DB: ${POSTGRES_DB:-pulseops}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    networks: [pulseops]
+
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.162.0
     container_name: pulseops-otel-collector

@@ -1,4 +1,4 @@
-# Architecture — Phase 1 & 2
+# Architecture — Phases 1, 2 & 3
 
 ## Components
 
@@ -14,6 +14,7 @@
 | `gateway` | Public entrypoint; calls `orders`; applies fault injection | FastAPI, this repo |
 | `migrate` | One-shot `alembic upgrade head` against Postgres, then exits | this repo (`processor/Dockerfile`) |
 | `processor` | Durable Kafka consumer group (`pulseops-event-normalizer`): decode -> validate -> idempotent upsert into Postgres, DLQ on malformed input | this repo (`processor/`) |
+| `detector` | Periodic (10s) sliding-window anomaly detector + incident correlator against Postgres | this repo (`detector/`) |
 
 ## Phase 2: normalized event schema and persistence
 
@@ -84,8 +85,9 @@ Each service's `TracerProvider` (`services/common/telemetry.py`) exports via
    `batch` (up to 1024 spans or 2s, whichever first).
 3. Exports via `kafkaexporter` to `otel.raw.v1`, encoding `otlp_json`
    (human-inspectable; the Phase 2 consumer and the Phase 1 smoke test both
-   decode this with a small hand-written walker in `kafka/otlp_json.py`
-   rather than depending on generated OTLP protobuf classes).
+   decode this with a small hand-written walker in
+   `services/common/otlp_json.py` rather than depending on generated OTLP
+   protobuf classes).
 4. `retry_on_failure` is enabled on the Kafka exporter (1s initial backoff,
    15s max, 60s max elapsed) to survive a momentarily-unavailable broker —
    this is delivery-retry, not payload dead-lettering.
@@ -106,6 +108,48 @@ not shared across replicas or authenticated in Phase 1 — see
 (not `/health` or `/admin/*`), so a demo service under fault injection still
 reports itself healthy — the fault is a property of the business logic path,
 not the process.
+
+## Phase 3: anomaly detection
+
+`detector/metrics.py` computes, per service and per 10-second sliding
+window, directly from Postgres: request count, error count (`http.status_code
+>= 500`), median latency, and the distinct `trace_id`s present. The unit of
+counting is "one row with an `http.route` attribute, excluding `/admin/*`"
+— verified against real data to be exactly the one true FastAPI server
+span per incoming request, not the several ASGI/httpx sub-spans each
+request also produces (see `docs/DECISIONS.md`).
+
+Two rules (`detector/rules.py`, pure functions, no I/O):
+
+- **Error rate**: fires if more than 20% of a window's requests returned a
+  5xx, and the window has at least 3 samples.
+- **Latency**: fires if the window's median latency exceeds
+  `max(ewma_baseline * 2, 20ms)`. The EWMA baseline (`alpha=0.3`) is
+  persisted per service in `service_baselines` and updated every tick
+  regardless of whether that tick was anomalous, so a sustained new normal
+  (not just a single spike) eventually becomes the new baseline.
+
+Both rules require their own metric (`status`'s span field is unusable —
+see `docs/DECISIONS.md`) and a cold-start baseline (`None`) always suppresses
+the latency rule rather than firing on absent data.
+
+## Phase 3: incident correlation
+
+`detector/correlate.py` (pure, no I/O) decides, for each new alert, whether
+to attach it to an existing open incident or start a new one:
+
+1. **Dedup**: same `(service, metric_type)` signature as an open incident,
+   seen within `DEDUP_WINDOW_SECONDS` (30s) — attach, don't duplicate.
+2. **Cross-service correlation**: shares at least one `trace_id` with an
+   open incident's alerts from the last `DEDUP_WINDOW_SECONDS` — attach,
+   and add this alert's service to the incident's `affected_services`.
+3. Otherwise — open a new incident.
+
+`detector/engine.py` wires this to Postgres (`persist_anomaly`), and
+`resolve_stale_incidents` marks any open incident `resolved` once
+`RESOLUTION_GRACE_SECONDS` (40s) has passed with no new alerts attached.
+`detector/main.py` runs one tick every 10 seconds as a long-running Docker
+service (`restart: unless-stopped`).
 
 ## Verified end-to-end runs
 
@@ -223,6 +267,51 @@ Combined with the smoke test's outage check and ordinary `/checkout` calls,
 this covers all four traffic patterns required by Phase 1: normal, 5xx
 spike, increased latency, and downstream outage.
 
+### Phase 3 unit tests (`pytest tests/phase3/test_rules.py tests/phase3/test_correlate.py -v`)
+
+```
+15 passed in 0.15s
+```
+
+### Phase 3 live fault-injection evaluation (`python tests/phase3/evaluation.py`)
+
+```
+=== Phase A: healthy traffic should not open any incident ===
+PASS: no incidents opened during healthy traffic -- found 0: []
+
+=== Phase B: sustained payments error-rate fault should open a correlated incident ===
+PASS: payments error-rate fault opened an incident within the expected wait
+PASS: the incident correlates all three causally-linked services (not 3 separate incidents) -- affected_services={'gateway', 'payments', 'orders'}
+PASS: severity reflects a 100% error rate as critical -- severity=critical
+
+=== Phase C: incident resolves once healthy traffic resumes and grace period elapses ===
+PASS: error-rate incident transitions to resolved after the grace period
+
+=== Phase D: sustained latency fault should produce a distinct 'latency' alert ===
+PASS: sustained latency fault opened a distinct latency-type incident
+
+All 6 checks passed.
+```
+
+Also run via `pytest tests/phase3/ -v` (unit tests + this harness together):
+`16 passed in 123.35s`.
+
+A direct query during the Phase B run shows exactly what the detector
+produced -- one `critical` incident spanning all three services from three
+separate per-service alerts, correlated via shared `trace_id`s:
+
+```
+ id |      signature      |         affected_services          | severity | status
+----+----------------------+------------------------------------+----------+--------
+  2 | payments:error_rate  | ["gateway", "orders", "payments"]  | critical | open
+
+ id | incident_id | service  | metric_type | observed |                        explanation
+----+-------------+----------+-------------+----------+-------------------------------------------------------------
+  4 |           2 | payments | error_rate  |    1.000 | 6/6 requests (100%) returned a 5xx status ... exceeding 20%
+  5 |           2 | gateway  | error_rate  |    1.000 | 6/6 requests (100%) returned a 5xx status ... exceeding 20%
+  6 |           2 | orders   | error_rate  |    1.000 | 6/6 requests (100%) returned a 5xx status ... exceeding 20%
+```
+
 ## Known limitations (stated up front, not discovered later)
 
 - `/admin/faults` has no auth. It's an internal dev/test control surface;
@@ -234,11 +323,25 @@ spike, increased latency, and downstream outage.
 - The processor is a single instance (one consumer group member). It never
   needed to prove multi-consumer partition rebalancing, only restart/replay
   recovery. Scaling to multiple processor replicas is unexercised.
-- `severity` is a simple status-code-derived label (`"error"` vs `"info"`),
-  not anomaly detection. Sliding-window error rates, EWMA baselines, and
-  explainable thresholds are Phase 3 scope and don't exist yet — don't read
-  `severity` as "this is already doing anomaly detection."
+- `events.severity` (Phase 2) is a simple per-span status-code-derived
+  label, distinct from `alerts`/`incidents.severity` (Phase 3), which is
+  derived from the detector's own rules (error rate >= 50%, or latency >=
+  4x baseline, maps to `"critical"`; otherwise `"warning"`). Don't confuse
+  the two columns.
 - The DB-outage recovery test (`tests/phase2/recovery_test.py`) exercises
   one processor instance crash-restarting against one stopped-then-restarted
   Postgres. It does not exercise Postgres data corruption, split-brain, or
   multi-replica coordination during the outage.
+- The detector is a single instance polling Postgres every 10s. It was not
+  built or tested for multiple concurrent detector replicas (which would
+  need to coordinate to avoid double-counting alerts); one instance is
+  sufficient for this system's scale.
+- Detection granularity is per-service only, not per-endpoint. A real
+  anomaly in one endpoint of a multi-endpoint service could be diluted by
+  that service's other healthy traffic in the same window. Acceptable here
+  since each demo service only exposes one meaningful business endpoint.
+- The "avoid merging unrelated failures" property is verified with
+  fabricated data (`tests/phase3/test_correlate.py`), not live traffic —
+  the three real demo services are always causally chained, so there is no
+  way to produce a genuinely unrelated failure between them live. See
+  `docs/DECISIONS.md`.

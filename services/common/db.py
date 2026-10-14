@@ -4,6 +4,13 @@ import os
 
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
+from sqlalchemy.orm import DeclarativeBase
+
+
+class Base(DeclarativeBase):
+    """Shared declarative base so Alembic's autogenerate sees every table
+    (processor/models.py, detector/models.py, ...) against one metadata
+    object, regardless of which backend component owns which table."""
 
 
 def database_url() -> str:

@@ -7,8 +7,9 @@ from sqlalchemy import engine_from_config, pool
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from processor.db import database_url  # noqa: E402
-from processor.models import Base  # noqa: E402
+from services.common.db import Base, database_url  # noqa: E402
+import detector.models  # noqa: E402,F401
+import processor.models  # noqa: E402,F401
 
 config = context.config
 

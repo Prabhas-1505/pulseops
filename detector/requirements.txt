@@ -1,0 +1,4 @@
+# Subset of processor/requirements.txt's pinned versions (frozen the same way,
+# same date) -- the detector only needs DB access, not Kafka or Alembic.
+SQLAlchemy==2.1.4
+psycopg[binary]==3.3.6

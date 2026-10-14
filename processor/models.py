@@ -4,11 +4,9 @@ from datetime import datetime
 
 from sqlalchemy import BigInteger, DateTime, Float, Integer, SmallInteger, String, func
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column
 
-
-class Base(DeclarativeBase):
-    pass
+from services.common.db import Base
 
 
 class Event(Base):

@@ -28,7 +28,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import OperationalError
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
-from processor.db import build_engine
+from services.common.db import build_engine
 from processor.models import Event
 from processor.schema import NormalizedEvent, NormalizationError, normalize_span
 from services.common.otlp_json import iter_spans

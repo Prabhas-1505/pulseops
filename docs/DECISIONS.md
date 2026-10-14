@@ -181,6 +181,75 @@ matches what SQLAlchemy would generate for the ORM models, rather than a
 hand-written migration silently drifting from `processor/models.py` over
 time.
 
+## 2026-10-14 — `status` span field is always UNSET; error detection uses `http.status_code` instead
+
+**Discovered, not anticipated:** expected OTel's auto-instrumentation to set
+a span's `status` to `ERROR` for 5xx HTTP responses (per the OTel semantic
+conventions for HTTP server spans). Checked real data after driving known
+5xx responses through the full stack: every span, including ones with
+`http.status_code` 500/502/503, had `status = "UNSET"` in this installed
+version (`opentelemetry-instrumentation-fastapi==0.66b1`). Rather than
+chase why, the detector derives "is this an error" directly from the
+`http.status_code` attribute (>= 500), which is more explainable anyway --
+a reader doesn't have to trust an opaque instrumentation behavior, they can
+see the literal status code the anomaly was computed from.
+
+## 2026-10-14 — `http.route` presence as the "one row per business request" filter
+
+Each incoming request produces ~14 spans (the real server span, several
+ASGI send/receive sub-spans, and an outbound httpx client span per hop) --
+verified by querying real data grouped by `event_type`. Counting all of
+them as "requests" would inflate the detector's sample counts and
+error/latency numbers by roughly an order of magnitude. Checked which
+`event_type`s actually carry an `http.route` attribute against live data:
+only the one true FastAPI server span per request does (not the ASGI
+sub-spans, not the httpx client spans). `detector/metrics.py` filters on
+`attributes ? 'http.route' AND NOT LIKE '/admin%'` to count exactly one row
+per real business request per service.
+
+## 2026-10-14 — SQLAlchemy `text()` chokes on `:param::jsonb` cast shorthand
+
+**Discovered, not anticipated:** binding a Python list to a JSONB column via
+raw `text()` SQL needs an explicit cast (psycopg3 adapts a Python `list` to
+a Postgres `ARRAY` literal by default, not JSON, so an uncast bind against a
+JSONB column fails with `invalid input syntax for type json`). The
+seemingly-obvious fix, `:affected_services::jsonb`, produced a confusing
+*different* error (`syntax error at or near ":"`) -- SQLAlchemy's `text()`
+bind-parameter parser doesn't reliably handle a Postgres `::type` cast
+immediately following a named parameter. Fixed by using
+`CAST(:affected_services AS JSONB)` instead, and passing a `json.dumps(...)`
+string for the parameter. All three JSONB-bound queries in
+`detector/engine.py` use this form.
+
+## 2026-10-14 — Anomaly detection thresholds are hardcoded, not learned
+
+Error-rate threshold (20%), latency multiplier (2x baseline), latency floor
+(20ms), EWMA alpha (0.3), minimum sample count (3) all live as named
+constants in `detector/config.py`, overridable via env vars but not tuned
+by any training process. This directly satisfies the spec's "explainable
+thresholds" requirement -- a reader can see exactly why an alert fired from
+`alerts.explanation` and the constant it compares against, without needing
+to reason about a model. The tradeoff, stated plainly: these thresholds
+were chosen to work well for this demo system's actual traffic shape
+(verified against real baseline/fault data in
+`tests/phase3/evaluation.py`), not validated against production-scale
+traffic patterns.
+
+## 2026-10-14 — Incident correlation: trace_id overlap, not time-window proximity alone
+
+An earlier design considered merging any alerts firing in the same time
+window regardless of trace linkage. Rejected: that would merge genuinely
+unrelated failures that just happened to occur simultaneously, which the
+spec explicitly calls out to avoid. `detector/correlate.py` requires an
+actual shared `trace_id` between a new alert's window and an open
+incident's recent alerts before merging across services -- this is why a
+real payments outage correctly becomes one incident spanning
+gateway+orders+payments (they share trace_ids, because gateway really did
+call orders really did call payments for the same requests), while a
+fabricated unrelated-service alert with no shared trace_id correctly stays
+its own incident (verified in
+`tests/phase3/test_correlate.py::test_unrelated_service_with_no_shared_trace_id_does_not_merge`).
+
 ## 2026-10-14 — Project repo separate from home-directory git repo
 
 The user's home directory (`~`) is itself a pre-existing, unrelated git
