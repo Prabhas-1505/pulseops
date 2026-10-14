@@ -1,0 +1,120 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="2060" viewBox="0 0 1800 2060">
+<defs>
+  <marker id="arrow" markerWidth="7" markerHeight="7" refX="5.2" refY="3.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L6 3.5 L0 7" stroke="#91a0ac" stroke-width=".6" fill="none"/></marker>
+  <marker id="darrow" markerWidth="7" markerHeight="7" refX="5.2" refY="3.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L6 3.5 L0 7" stroke="#6485a3" stroke-width=".6" fill="none"/></marker>
+</defs>
+<rect x="0" y="0" width="1800" height="2060" fill="#05070b"/>
+
+<path d="M900.0,100.0 L900.0,140.0" stroke="#87949f" stroke-width="1.45" fill="none" stroke-linejoin="round"  marker-end="url(#arrow)" opacity="1"/>
+<path d="M900.0,200.0 L900.0,242.0 L435.0,242.0 L435.0,255.0" stroke="#87949f" stroke-width="1.45" fill="none" stroke-linejoin="round"  marker-end="url(#arrow)" opacity="1"/>
+<path d="M572.5,285.0 L762.5,285.0" stroke="#87949f" stroke-width="1.45" fill="none" stroke-linejoin="round"  marker-end="url(#arrow)" opacity="1"/>
+<text x="665" y="269" fill="#93a8b9" font-family="DejaVu Sans,Arial,sans-serif" font-size="14" text-anchor="middle">HTTP</text>
+<path d="M1037.5,285.0 L1227.5,285.0" stroke="#87949f" stroke-width="1.45" fill="none" stroke-linejoin="round"  marker-end="url(#arrow)" opacity="1"/>
+<text x="1132" y="269" fill="#93a8b9" font-family="DejaVu Sans,Arial,sans-serif" font-size="14" text-anchor="middle">HTTP</text>
+<path d="M435.0,315.0 L435.0,356.0" stroke="#6c8da6" stroke-width="1.45" fill="none" stroke-linejoin="round" stroke-dasharray="7 6"  opacity="1"/>
+<path d="M900.0,315.0 L900.0,356.0" stroke="#6c8da6" stroke-width="1.45" fill="none" stroke-linejoin="round" stroke-dasharray="7 6"  opacity="1"/>
+<path d="M1365.0,315.0 L1365.0,356.0" stroke="#6c8da6" stroke-width="1.45" fill="none" stroke-linejoin="round" stroke-dasharray="7 6"  opacity="1"/>
+<path d="M435.0,356.0 L1365.0,356.0" stroke="#6c8da6" stroke-width="1.45" fill="none" stroke-linejoin="round" stroke-dasharray="7 6"  opacity="1"/>
+<path d="M900.0,356.0 L900.0,380.0" stroke="#6c8da6" stroke-width="1.45" fill="none" stroke-linejoin="round" stroke-dasharray="7 6" marker-end="url(#darrow)" opacity="1"/>
+<path d="M900.0,440.0 L900.0,485.0" stroke="#87949f" stroke-width="1.45" fill="none" stroke-linejoin="round"  marker-end="url(#arrow)" opacity="1"/>
+<path d="M900.0,545.0 L900.0,590.0" stroke="#87949f" stroke-width="1.45" fill="none" stroke-linejoin="round"  marker-end="url(#arrow)" opacity="1"/>
+<path d="M900.0,650.0 L900.0,695.0" stroke="#87949f" stroke-width="1.45" fill="none" stroke-linejoin="round"  marker-end="url(#arrow)" opacity="1"/>
+<path d="M900.0,755.0 L900.0,793.0 L620.0,793.0 L620.0,814.0" stroke="#87949f" stroke-width="1.45" fill="none" stroke-linejoin="round"  marker-end="url(#arrow)" opacity="1"/>
+<path d="M765.0,845.0 L842.5,845.0" stroke="#87949f" stroke-width="1.45" fill="none" stroke-linejoin="round"  marker-end="url(#arrow)" opacity="1"/>
+<path d="M1137.5,845.0 L1220.0,845.0" stroke="#87949f" stroke-width="1.45" fill="none" stroke-linejoin="round"  marker-end="url(#arrow)" opacity="1"/>
+<path d="M475.0,845.0 L402.5,845.0" stroke="#6c8da6" stroke-width="1.45" fill="none" stroke-linejoin="round" stroke-dasharray="7 6" marker-end="url(#darrow)" opacity="1"/>
+<text x="440" y="829" fill="#93a8b9" font-family="DejaVu Sans,Arial,sans-serif" font-size="14" text-anchor="middle">invalid</text>
+<path d="M1370.0,876.0 L1370.0,922.0 L900.0,922.0 L900.0,935.0" stroke="#87949f" stroke-width="1.45" fill="none" stroke-linejoin="round"  marker-end="url(#arrow)" opacity="1"/>
+<path d="M900.0,1005.0 L900.0,1054.0" stroke="#87949f" stroke-width="1.45" fill="none" stroke-linejoin="round"  marker-end="url(#arrow)" opacity="1"/>
+<path d="M900.0,1116.0 L900.0,1150.0 L670.0,1150.0 L670.0,1169.0" stroke="#87949f" stroke-width="1.45" fill="none" stroke-linejoin="round"  marker-end="url(#arrow)" opacity="1"/>
+<path d="M900.0,1116.0 L900.0,1150.0 L1130.0,1150.0 L1130.0,1169.0" stroke="#87949f" stroke-width="1.45" fill="none" stroke-linejoin="round"  marker-end="url(#arrow)" opacity="1"/>
+<path d="M670.0,1231.0 L670.0,1271.0 L900.0,1271.0 L900.0,1290.0" stroke="#87949f" stroke-width="1.45" fill="none" stroke-linejoin="round"  marker-end="url(#arrow)" opacity="1"/>
+<path d="M1130.0,1231.0 L1130.0,1271.0 L900.0,1271.0 L900.0,1290.0" stroke="#87949f" stroke-width="1.45" fill="none" stroke-linejoin="round"  marker-end="url(#arrow)" opacity="1"/>
+<path d="M900.0,1350.0 L900.0,1395.0" stroke="#87949f" stroke-width="1.45" fill="none" stroke-linejoin="round"  marker-end="url(#arrow)" opacity="1"/>
+<path d="M900.0,1465.0 L900.0,1537.0" stroke="#87949f" stroke-width="1.45" fill="none" stroke-linejoin="round"  marker-end="url(#arrow)" opacity="1"/>
+<path d="M1082.5,970.0 L1710.0,970.0 L1710.0,1508.0 L1052.0,1508.0 L1052.0,1537.0" stroke="#6c8da6" stroke-width="1.45" fill="none" stroke-linejoin="round" stroke-dasharray="7 6" marker-end="url(#darrow)" opacity="0.7"/>
+<text x="1621" y="948" fill="#93a8b9" font-family="DejaVu Sans,Arial,sans-serif" font-size="14" text-anchor="middle">API reads stored data</text>
+<path d="M725.0,1570.0 L536.0,1570.0" stroke="#87949f" stroke-width="1.45" fill="none" stroke-linejoin="round"  marker-end="url(#arrow)" opacity="1"/>
+<path d="M1075.0,1570.0 L1264.0,1570.0" stroke="#6c8da6" stroke-width="1.45" fill="none" stroke-linejoin="round" stroke-dasharray="7 6" marker-end="url(#darrow)" opacity="1"/>
+<path d="M900.0,1603.0 L900.0,1652.0" stroke="#87949f" stroke-width="1.45" fill="none" stroke-linejoin="round"  marker-end="url(#arrow)" opacity="1"/>
+<path d="M900.0,1718.0 L900.0,1756.0 L265.0,1756.0 L265.0,1779.0" stroke="#87949f" stroke-width="1.45" fill="none" stroke-linejoin="round"  marker-end="url(#arrow)" opacity="1"/>
+<path d="M900.0,1718.0 L900.0,1756.0 L685.0,1756.0 L685.0,1779.0" stroke="#87949f" stroke-width="1.45" fill="none" stroke-linejoin="round"  marker-end="url(#arrow)" opacity="1"/>
+<path d="M900.0,1718.0 L900.0,1756.0 L1110.0,1756.0 L1110.0,1779.0" stroke="#87949f" stroke-width="1.45" fill="none" stroke-linejoin="round"  marker-end="url(#arrow)" opacity="1"/>
+<path d="M900.0,1718.0 L900.0,1756.0 L1530.0,1756.0 L1530.0,1779.0" stroke="#87949f" stroke-width="1.45" fill="none" stroke-linejoin="round"  marker-end="url(#arrow)" opacity="1"/>
+<line x1="145" x2="1655" y1="1890" y2="1890" stroke="#294154" stroke-width="1"/>
+<text x="900" y="1921" fill="#7893ab" font-family="DejaVu Sans,Arial,sans-serif" font-weight="600" font-size="15" letter-spacing="2.5" text-anchor="middle">SUPPORTING INFRASTRUCTURE · OUTSIDE THE REQUEST PATH</text>
+<rect x="742.5" y="40.0" width="315" height="60" rx="17" ry="17" fill="#062e51" stroke="#13466e" stroke-width="1.15"/>
+<text x="900" y="75.5" fill="#bedcf7" font-family="DejaVu Sans,Arial,sans-serif" font-size="17" font-weight="600" text-anchor="middle">User Requests / Service Traffic</text>
+<rect x="715.0" y="140.0" width="370" height="60" rx="17" ry="17" fill="#062e51" stroke="#13466e" stroke-width="1.15"/>
+<text x="900" y="175.5" fill="#bedcf7" font-family="DejaVu Sans,Arial,sans-serif" font-size="17" font-weight="600" text-anchor="middle">Instrumented FastAPI Microservices</text>
+<rect x="297.5" y="255.0" width="275" height="60" rx="17" ry="17" fill="#062e51" stroke="#13466e" stroke-width="1.15"/>
+<text x="435" y="290.5" fill="#bedcf7" font-family="DejaVu Sans,Arial,sans-serif" font-size="17" font-weight="600" text-anchor="middle">API Gateway</text>
+<rect x="762.5" y="255.0" width="275" height="60" rx="17" ry="17" fill="#062e51" stroke="#13466e" stroke-width="1.15"/>
+<text x="900" y="290.5" fill="#bedcf7" font-family="DejaVu Sans,Arial,sans-serif" font-size="17" font-weight="600" text-anchor="middle">Orders Service</text>
+<rect x="1227.5" y="255.0" width="275" height="60" rx="17" ry="17" fill="#062e51" stroke="#13466e" stroke-width="1.15"/>
+<text x="1365" y="290.5" fill="#bedcf7" font-family="DejaVu Sans,Arial,sans-serif" font-size="17" font-weight="600" text-anchor="middle">Payments Service</text>
+<rect x="720.0" y="380.0" width="360" height="60" rx="17" ry="17" fill="#062e51" stroke="#13466e" stroke-width="1.15"/>
+<text x="900" y="405" fill="#c4e2ff" font-family="DejaVu Sans,Arial,sans-serif" font-size="16.5" font-weight="600" text-anchor="middle">OpenTelemetry SDK</text>
+<text x="900" y="427" fill="#92b8d7" font-family="DejaVu Sans,Arial,sans-serif" font-size="13.3" text-anchor="middle">Distributed Tracing</text>
+<rect x="737.5" y="485.0" width="325" height="60" rx="17" ry="17" fill="#062e51" stroke="#13466e" stroke-width="1.15"/>
+<text x="900" y="520.5" fill="#bedcf7" font-family="DejaVu Sans,Arial,sans-serif" font-size="17" font-weight="600" text-anchor="middle">OpenTelemetry Collector</text>
+<rect x="742.5" y="590.0" width="315" height="60" rx="17" ry="17" fill="#062e51" stroke="#13466e" stroke-width="1.15"/>
+<text x="900" y="625.5" fill="#bedcf7" font-family="DejaVu Sans,Arial,sans-serif" font-size="17" font-weight="600" text-anchor="middle">Kafka Topic  ·  otel.raw.v1</text>
+<rect x="737.5" y="695.0" width="325" height="60" rx="17" ry="17" fill="#062e51" stroke="#13466e" stroke-width="1.15"/>
+<text x="900" y="730.5" fill="#bedcf7" font-family="DejaVu Sans,Arial,sans-serif" font-size="17" font-weight="600" text-anchor="middle">Event Processing Worker</text>
+<rect x="117.5" y="814.0" width="285" height="62" rx="17" ry="17" fill="#062e51" stroke="#13466e" stroke-width="1.15"/>
+<text x="260" y="840" fill="#c4e2ff" font-family="DejaVu Sans,Arial,sans-serif" font-size="16.5" font-weight="600" text-anchor="middle">Dead Letter Queue</text>
+<text x="260" y="862" fill="#92b8d7" font-family="DejaVu Sans,Arial,sans-serif" font-size="13.3" text-anchor="middle">otel.dlq.v1</text>
+<rect x="475.0" y="814.0" width="290" height="62" rx="17" ry="17" fill="#062e51" stroke="#13466e" stroke-width="1.15"/>
+<text x="620" y="840" fill="#c4e2ff" font-family="DejaVu Sans,Arial,sans-serif" font-size="16.5" font-weight="600" text-anchor="middle">Normalize + Validate</text>
+<text x="620" y="862" fill="#92b8d7" font-family="DejaVu Sans,Arial,sans-serif" font-size="13.3" text-anchor="middle">Telemetry Events</text>
+<rect x="842.5" y="814.0" width="295" height="62" rx="17" ry="17" fill="#062e51" stroke="#13466e" stroke-width="1.15"/>
+<text x="990" y="840" fill="#c4e2ff" font-family="DejaVu Sans,Arial,sans-serif" font-size="16.5" font-weight="600" text-anchor="middle">Idempotent Deduplication</text>
+<text x="990" y="862" fill="#92b8d7" font-family="DejaVu Sans,Arial,sans-serif" font-size="13.3" text-anchor="middle">trace_id + span_id</text>
+<rect x="1220.0" y="814.0" width="300" height="62" rx="17" ry="17" fill="#062e51" stroke="#13466e" stroke-width="1.15"/>
+<text x="1370" y="840" fill="#c4e2ff" font-family="DejaVu Sans,Arial,sans-serif" font-size="16.5" font-weight="600" text-anchor="middle">Persist Events</text>
+<text x="1370" y="862" fill="#92b8d7" font-family="DejaVu Sans,Arial,sans-serif" font-size="13.3" text-anchor="middle">PostgreSQL Upsert</text>
+<rect x="717.5" y="935.0" width="365" height="70" rx="17" ry="17" fill="#062e51" stroke="#13466e" stroke-width="1.15"/>
+<text x="900" y="965" fill="#c4e2ff" font-family="DejaVu Sans,Arial,sans-serif" font-size="16.5" font-weight="600" text-anchor="middle">PostgreSQL</text>
+<text x="900" y="987" fill="#92b8d7" font-family="DejaVu Sans,Arial,sans-serif" font-size="13.3" text-anchor="middle">Events · Baselines · Alerts · Incidents · Users</text>
+<rect x="705.0" y="1054.0" width="390" height="62" rx="17" ry="17" fill="#062e51" stroke="#13466e" stroke-width="1.15"/>
+<text x="900" y="1080" fill="#c4e2ff" font-family="DejaVu Sans,Arial,sans-serif" font-size="16.5" font-weight="600" text-anchor="middle">Anomaly Detection Engine</text>
+<text x="900" y="1102" fill="#92b8d7" font-family="DejaVu Sans,Arial,sans-serif" font-size="13.3" text-anchor="middle">10-second Detection Cycle</text>
+<rect x="502.5" y="1169.0" width="335" height="62" rx="17" ry="17" fill="#062e51" stroke="#13466e" stroke-width="1.15"/>
+<text x="670" y="1195" fill="#c4e2ff" font-family="DejaVu Sans,Arial,sans-serif" font-size="16.5" font-weight="600" text-anchor="middle">Latency Spike Detection</text>
+<text x="670" y="1217" fill="#92b8d7" font-family="DejaVu Sans,Arial,sans-serif" font-size="13.3" text-anchor="middle">EWMA Baseline</text>
+<rect x="962.5" y="1169.0" width="335" height="62" rx="17" ry="17" fill="#062e51" stroke="#13466e" stroke-width="1.15"/>
+<text x="1130" y="1195" fill="#c4e2ff" font-family="DejaVu Sans,Arial,sans-serif" font-size="16.5" font-weight="600" text-anchor="middle">Error-Rate Detection</text>
+<text x="1130" y="1217" fill="#92b8d7" font-family="DejaVu Sans,Arial,sans-serif" font-size="13.3" text-anchor="middle">&gt; 20% HTTP 5xx</text>
+<rect x="710.0" y="1290.0" width="380" height="60" rx="17" ry="17" fill="#062e51" stroke="#13466e" stroke-width="1.15"/>
+<text x="900" y="1325.5" fill="#bedcf7" font-family="DejaVu Sans,Arial,sans-serif" font-size="17" font-weight="600" text-anchor="middle">Trace-Based Incident Correlation</text>
+<rect x="704.0" y="1395.0" width="392" height="70" rx="17" ry="17" fill="#062e51" stroke="#13466e" stroke-width="1.15"/>
+<text x="900" y="1425" fill="#c4e2ff" font-family="DejaVu Sans,Arial,sans-serif" font-size="16.5" font-weight="600" text-anchor="middle">Group Related Alerts into Incidents</text>
+<text x="900" y="1447" fill="#92b8d7" font-family="DejaVu Sans,Arial,sans-serif" font-size="13.3" text-anchor="middle">Deduplicate · Auto-Resolve</text>
+<rect x="234.0" y="1540.0" width="302" height="60" rx="17" ry="17" fill="#062e51" stroke="#13466e" stroke-width="1.15"/>
+<text x="385" y="1565" fill="#c4e2ff" font-family="DejaVu Sans,Arial,sans-serif" font-size="16.5" font-weight="600" text-anchor="middle">Redis</text>
+<text x="385" y="1587" fill="#92b8d7" font-family="DejaVu Sans,Arial,sans-serif" font-size="13.3" text-anchor="middle">API Rate Limiting</text>
+<rect x="725.0" y="1537.0" width="350" height="66" rx="17" ry="17" fill="#062e51" stroke="#13466e" stroke-width="1.15"/>
+<text x="900" y="1565" fill="#c4e2ff" font-family="DejaVu Sans,Arial,sans-serif" font-size="16.5" font-weight="600" text-anchor="middle">FastAPI Management Backend</text>
+<text x="900" y="1587" fill="#92b8d7" font-family="DejaVu Sans,Arial,sans-serif" font-size="13.3" text-anchor="middle">JWT · REST · SSE</text>
+<rect x="1264.0" y="1540.0" width="302" height="60" rx="17" ry="17" fill="#062e51" stroke="#13466e" stroke-width="1.15"/>
+<text x="1415" y="1565" fill="#c4e2ff" font-family="DejaVu Sans,Arial,sans-serif" font-size="16.5" font-weight="600" text-anchor="middle">OpenAI API (Optional)</text>
+<text x="1415" y="1587" fill="#92b8d7" font-family="DejaVu Sans,Arial,sans-serif" font-size="13.3" text-anchor="middle">Incident Summaries + Fallback</text>
+<rect x="715.0" y="1652.0" width="370" height="66" rx="17" ry="17" fill="#062e51" stroke="#13466e" stroke-width="1.15"/>
+<text x="900" y="1680" fill="#c4e2ff" font-family="DejaVu Sans,Arial,sans-serif" font-size="16.5" font-weight="600" text-anchor="middle">React + TypeScript Dashboard</text>
+<text x="900" y="1702" fill="#92b8d7" font-family="DejaVu Sans,Arial,sans-serif" font-size="13.3" text-anchor="middle">Live Updates via SSE</text>
+<rect x="120.0" y="1779.0" width="290" height="62" rx="17" ry="17" fill="#062e51" stroke="#13466e" stroke-width="1.15"/>
+<text x="265" y="1815.5" fill="#bedcf7" font-family="DejaVu Sans,Arial,sans-serif" font-size="17" font-weight="600" text-anchor="middle">Live Service Health</text>
+<rect x="540.0" y="1779.0" width="290" height="62" rx="17" ry="17" fill="#062e51" stroke="#13466e" stroke-width="1.15"/>
+<text x="685" y="1815.5" fill="#bedcf7" font-family="DejaVu Sans,Arial,sans-serif" font-size="17" font-weight="600" text-anchor="middle">Incident Timeline</text>
+<rect x="955.0" y="1779.0" width="310" height="62" rx="17" ry="17" fill="#062e51" stroke="#13466e" stroke-width="1.15"/>
+<text x="1110" y="1815.5" fill="#bedcf7" font-family="DejaVu Sans,Arial,sans-serif" font-size="17" font-weight="600" text-anchor="middle">Incident Details + Evidence</text>
+<rect x="1385.0" y="1779.0" width="290" height="62" rx="17" ry="17" fill="#062e51" stroke="#13466e" stroke-width="1.15"/>
+<text x="1530" y="1815.5" fill="#bedcf7" font-family="DejaVu Sans,Arial,sans-serif" font-size="17" font-weight="600" text-anchor="middle">AI Explanations</text>
+<rect x="280.0" y="1940" width="380" height="55" rx="15" fill="#0a2237" stroke="#23435a" stroke-width="1"/>
+<text x="470" y="1973" fill="#aacde8" font-family="DejaVu Sans,Arial,sans-serif" font-size="15" font-weight="600" text-anchor="middle">Docker Compose · Local Deployment</text>
+<rect x="710.0" y="1940" width="380" height="55" rx="15" fill="#0a2237" stroke="#23435a" stroke-width="1"/>
+<text x="900" y="1973" fill="#aacde8" font-family="DejaVu Sans,Arial,sans-serif" font-size="15" font-weight="600" text-anchor="middle">GitHub Actions · CI + Automated Tests</text>
+<rect x="1140.0" y="1940" width="380" height="55" rx="15" fill="#0a2237" stroke="#23435a" stroke-width="1"/>
+<text x="1330" y="1973" fill="#aacde8" font-family="DejaVu Sans,Arial,sans-serif" font-size="15" font-weight="600" text-anchor="middle">Locust · Load Benchmarks</text>
+</svg>
