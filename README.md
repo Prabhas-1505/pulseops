@@ -13,34 +13,15 @@ for what was built in each.
 
 ## Architecture (current: Phase 5)
 
-```mermaid
-flowchart LR
-    subgraph Demo["Demo services (FastAPI, OTel-instrumented)"]
-        GW["gateway\nPOST /checkout"] -->|httpx, trace-propagated| ORD["orders\nPOST /orders"]
-        ORD -->|httpx, trace-propagated| PAY["payments\nPOST /charge"]
-    end
+<h2>🏗️ System Architecture</h2>
 
-    GW -. OTLP/gRPC :4317 .-> OTEL["OTel Collector\n(otlp receiver -> batch -> kafkaexporter)"]
-    ORD -. OTLP/gRPC :4317 .-> OTEL
-    PAY -. OTLP/gRPC :4317 .-> OTEL
-
-    OTEL -->|otlp_json, keyed by trace_id| RAW["Kafka topic\notel.raw.v1\n(3 partitions)"]
-
-    RAW --> PROC["processor\n(pulseops-event-normalizer consumer group)\ndecode -> validate -> idempotent upsert"]
-    PROC -->|malformed messages| DLQ["Kafka topic\notel.dlq.v1"]
-    PROC -->|ON CONFLICT DO NOTHING on event_id| PG[("PostgreSQL\nevents, service_baselines,\nalerts, incidents, users")]
-
-    PG --> DET["detector\n(10s sliding window, every 10s)\nerror-rate threshold + EWMA latency baseline"]
-    DET -->|anomaly| ALERT["alerts table"]
-    ALERT -->|correlate via trace_id overlap + dedup| INC["incidents table\n(open -> resolved)"]
-
-    PG --> API["api\nJWT auth, pagination,\nRedis rate limiting, SSE, AI summary"]
-    REDIS[("Redis\nrate-limit counters")] <-->|INCR/EXPIRE| API
-    API -->|REST + SSE| DASH["dashboard\n(React + Vite, served by nginx)"]
-    API -.->|optional| OPENAI(["OpenAI API\n(non-LLM fallback if no key)"])
-
-    RAW -.->|Phase 1 smoke test only| SMOKE["kafka/smoke_test.py\n(throwaway consumer group)"]
-```
+<p align="center">
+  <img
+    src="docs/pulseops_readme_architecture.svg"
+    alt="PulseOps Architecture Diagram"
+    width="100%"
+  />
+</p>
 
 Every demo-service request is a real HTTP call across three independent
 FastAPI processes, trace-propagated end to end (W3C traceparent via
