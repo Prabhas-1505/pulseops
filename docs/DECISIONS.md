@@ -250,6 +250,72 @@ fabricated unrelated-service alert with no shared trace_id correctly stays
 its own incident (verified in
 `tests/phase3/test_correlate.py::test_unrelated_service_with_no_shared_trace_id_does_not_merge`).
 
+## 2026-10-14 — SSE auth via `?token=` query param, not a bearer header
+
+**Discovered, not anticipated:** the browser's native `EventSource` API
+cannot set custom request headers, so `Authorization: Bearer <token>` is
+not an option for the dashboard's live incident stream. `api/deps.py`'s
+`get_current_user_sse` accepts the JWT via either a bearer header (for
+non-browser clients, e.g. `curl`) or a `?token=` query param (what the
+dashboard actually uses) -- a split from the router-level
+`get_current_user` dependency used everywhere else, applied only to
+`/incidents/stream/live` via its own `stream_router` so the rest of the
+API keeps strict bearer-only auth.
+
+## 2026-10-14 — OpenAI integration: two real bugs found by actually calling it
+
+Tested live against the real OpenAI API (user-supplied key, `gpt-5-nano`)
+rather than trusting the SDK's types:
+
+1. `max_tokens` is rejected for this model family: "Unsupported parameter:
+   'max_tokens' is not supported with this model. Use
+   'max_completion_tokens' instead." Fixed by switching the parameter.
+2. Even with `max_completion_tokens=1500`, this model can still return
+   *empty* visible content: `gpt-5-nano` is a reasoning-tier model that
+   spends part of the token budget on hidden `reasoning_tokens` before any
+   visible text, and that split isn't predictable from prompt length alone
+   (a trivial prompt used ~192 reasoning tokens; this module's real
+   system+user prompt exhausted a 1500-token budget on reasoning alone,
+   leaving zero for output). Fixed two ways: raised the budget to 3000, and
+   -- more importantly -- added an explicit check that raises if
+   `response.choices[0].message.content` is empty, so this now correctly
+   falls back to the deterministic summary instead of silently returning a
+   response with blank `suspected_cause`/`summary` fields. The first fix
+   (budget) is a mitigation; the second (fail loud, fall back) is the real
+   fix, because the failure mode isn't fully predictable in advance.
+
+## 2026-10-14 — Dashboard: hand-written minimal Vite+React+TS, no charting library
+
+Wrote `package.json`/`tsconfig.json`/`vite.config.ts` by hand instead of
+scaffolding via `npm create vite` to avoid template boilerplate unrelated
+to this app. The latency sparkline (`LatencyChart.tsx`) is a ~20-line
+hand-rolled SVG path rather than a charting library dependency -- at most
+20 data points on one line, a full charting library would be solving a
+much bigger problem than this one has.
+
+## 2026-10-14 — Dashboard tested in an actual headless browser, not just `tsc --noEmit`
+
+A passing TypeScript build proves the code compiles, not that the app
+works. Verified the real golden path (login -> service health ->
+incident list -> incident detail with evidence -> acknowledge ->
+live SSE badge) in headless Chromium via Playwright, against both the Vite
+dev server and the production nginx-served Docker build, checking actual
+rendered text, taking screenshots (inspected, not just captured), and
+asserting zero browser console errors and zero 4xx/5xx network responses.
+The driver script lived in a scratch directory outside the repo (a
+one-shot Playwright script, not a reusable project asset) -- what's
+committed is the dashboard code it verified, not the throwaway test
+harness itself.
+
+## 2026-10-14 — Permissive CORS on the management API
+
+`api/main.py` allows all origins/methods/headers. This is a local/demo
+system with no production deployment target; a real deployment would
+restrict this to the dashboard's actual origin. Flagged here and in
+`docs/ARCHITECTURE.md` as a known, deliberate simplification -- Phase 5's
+security review is the right place to revisit it if this were ever
+deployed for real.
+
 ## 2026-10-14 — Project repo separate from home-directory git repo
 
 The user's home directory (`~`) is itself a pre-existing, unrelated git

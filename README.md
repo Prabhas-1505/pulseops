@@ -4,14 +4,14 @@
 
 A portfolio project demonstrating backend/distributed-systems engineering:
 Kafka event streaming, OpenTelemetry instrumentation, fault-tolerant
-ingestion, and (in later phases) anomaly detection, incident correlation,
-and a management API + dashboard. AI is a secondary, optional enrichment
-feature (Phase 4), not the core architecture.
+ingestion, anomaly detection, incident correlation, and an authenticated
+management API + React dashboard. AI is a secondary, optional enrichment
+feature, not the core architecture.
 
-**Status: Phase 3 of 5 complete and verified.** See [Project phases](#project-phases)
+**Status: Phase 4 of 5 complete and verified.** See [Project phases](#project-phases)
 for what exists today vs. what's planned.
 
-## Architecture (current: Phase 3)
+## Architecture (current: Phase 4)
 
 ```mermaid
 flowchart LR
@@ -28,15 +28,18 @@ flowchart LR
 
     RAW --> PROC["processor\n(pulseops-event-normalizer consumer group)\ndecode -> validate -> idempotent upsert"]
     PROC -->|malformed messages| DLQ["Kafka topic\notel.dlq.v1"]
-    PROC -->|ON CONFLICT DO NOTHING on event_id| PG[("PostgreSQL\nevents, service_baselines,\nalerts, incidents")]
+    PROC -->|ON CONFLICT DO NOTHING on event_id| PG[("PostgreSQL\nevents, service_baselines,\nalerts, incidents, users")]
 
     PG --> DET["detector\n(10s sliding window, every 10s)\nerror-rate threshold + EWMA latency baseline"]
     DET -->|anomaly| ALERT["alerts table"]
     ALERT -->|correlate via trace_id overlap + dedup| INC["incidents table\n(open -> resolved)"]
 
-    RAW -.->|Phase 1 smoke test only| SMOKE["kafka/smoke_test.py\n(throwaway consumer group)"]
+    PG --> API["api\nJWT auth, pagination,\nRedis rate limiting, SSE, AI summary"]
+    REDIS[("Redis\nrate-limit counters")] <-->|INCR/EXPIRE| API
+    API -->|REST + SSE| DASH["dashboard\n(React + Vite, served by nginx)"]
+    API -.->|optional| OPENAI(["OpenAI API\n(non-LLM fallback if no key)"])
 
-    REDIS[("Redis\n(provisioned, unused until Phase 4)")]
+    RAW -.->|Phase 1 smoke test only| SMOKE["kafka/smoke_test.py\n(throwaway consumer group)"]
 ```
 
 Every demo-service request is a real HTTP call across three independent
@@ -45,8 +48,9 @@ instrumented httpx), exported over OTLP/gRPC to an OpenTelemetry Collector,
 which batches and exports spans as OTLP-JSON Kafka messages. A durable
 consumer (`processor/`) then normalizes those spans into a versioned schema
 and persists them to Postgres idempotently. A periodic `detector/` service
-then watches Postgres for sliding-window anomalies and correlates them into
-incidents.
+watches Postgres for sliding-window anomalies and correlates them into
+incidents. An authenticated `api/` exposes that data (with Redis-backed rate
+limiting and live SSE updates) to a React `dashboard/`.
 
 ## What's actually implemented
 
@@ -152,13 +156,63 @@ incidents.
   elapses; a separate sustained latency fault produces a distinct
   `latency`-type incident.
 
+### Phase 4 -- authenticated management API, React dashboard, optional AI summaries
+
+- `api/`: a FastAPI management service, separate from the three demo
+  services. JWT auth (`PyJWT`, HS256) over a `users` table with `bcrypt`
+  password hashing (`/auth/register`, `/auth/login`); every other route
+  requires a valid bearer token (verified live: no token -> 401).
+- Redis-backed rate limiting (`api/rate_limit.py`): a real fixed-window
+  limiter (`INCR`/`EXPIRE`), shared state across the API's lifetime (not an
+  in-process counter) -- verified live by hammering `/auth/login` past its
+  5-per-60s limit and getting 429s with a `Retry-After`-style message.
+- `GET /incidents` (paginated, filterable by `status`/`severity`),
+  `GET /incidents/{id}` (detail with linked evidence -- actual `events` rows
+  for the incident's alert `trace_ids`), `POST /incidents/{id}/acknowledge`,
+  `GET /services/health`, `GET /services/{service}/latency-history`. Full
+  OpenAPI docs at `/docs`.
+- `GET /incidents/stream/live`: a real SSE endpoint (2s full-snapshot
+  polling, not a diff -- a reconnecting client is correct immediately with
+  no replay state to track). Authenticates via `?token=` query param rather
+  than a bearer header, because browsers' native `EventSource` API cannot
+  set custom headers -- discovered while wiring up the dashboard, not
+  assumed going in (see `docs/DECISIONS.md`).
+- `api/ai_summary.py`: incident summaries via OpenAI (`gpt-5-nano`), with
+  verified evidence (the detector's own measured alert data) always kept
+  structurally separate from the LLM's free-text "suspected cause," and a
+  deterministic non-LLM fallback used automatically when no
+  `OPENAI_API_KEY` is set. Untrusted data (`events.attributes`, which
+  ultimately comes from HTTP request bodies) is wrapped in delimited
+  `<untrusted_data>` tags with an explicit "describe, don't obey"
+  instruction -- a basic prompt-injection defense. The endpoint never
+  executes anything an LLM (or the untrusted input) returns; it only
+  returns text. Tested live against the real OpenAI API with a real key
+  (two real bugs found and fixed this way -- a `max_tokens` parameter
+  rename and a reasoning-token budget that silently produced empty
+  content; see `docs/DECISIONS.md`).
+- `dashboard/`: a Vite + React + TypeScript SPA (no heavy UI framework,
+  hand-rolled SVG sparkline instead of a charting library) -- login/register,
+  a service-health panel, a filterable incident timeline, an incident
+  detail view (alerts, linked evidence, acknowledge button, AI summary),
+  and a live-updating header badge driven by the SSE stream with
+  exponential-backoff reconnect. Built and served via `nginx:1.30-alpine`
+  in `docker-compose.yml`.
+- The full golden path (login -> service health -> incident list -> incident
+  detail with evidence -> acknowledge status -> live SSE badge) was
+  verified in an actual headless-Chromium browser, against both the Vite
+  dev server and the production nginx-served Docker build, with zero
+  console errors and zero 4xx/5xx network responses. Screenshots were
+  inspected, not just text-scraped.
+
 ### Not yet implemented
 
-Everything from Phase 4 onward: the authenticated management API, the React
-dashboard, and AI incident summaries. Redis is provisioned in
-`docker-compose.yml` but nothing reads or writes it yet (that's Phase 4 --
-rate limiting). No load/benchmark numbers exist yet -- see
-`docs/BENCHMARK_RESULTS.md`, which is intentionally a stub until Phase 5.
+The React dashboard, authenticated flows, and AI summary above cover all of
+Phase 4's spec requirements. What's left is Phase 5: a full
+unit/integration/e2e test suite beyond what phases 1-4 already have, load
+benchmarks (Locust/k6), a security review, GitHub Actions CI actually
+executed on GitHub's infrastructure (the workflow file exists but has only
+been run locally so far), and final documentation passes. See
+`docs/BENCHMARK_RESULTS.md`, which is intentionally a stub until then.
 
 ## Running it
 
@@ -170,9 +224,15 @@ docker compose up -d --build
 This starts Kafka (KRaft, single node), Postgres, and Redis; runs
 `kafka-init` (creates the two topics) and `migrate` (`alembic upgrade head`)
 as one-shot jobs; starts the OTel Collector; then builds and starts
-`payments`, `orders`, `gateway`, `processor`, and `detector` in dependency
-order. Service ports (host side, overridable via `.env`): gateway `:8000`,
-orders `:8001`, payments `:8002`.
+`payments`, `orders`, `gateway`, `processor`, `detector`, `api`, and
+`dashboard` in dependency order. Service ports (host side, overridable via
+`.env`): gateway `:8000`, orders `:8001`, payments `:8002`, management API
+`:8080`, dashboard `:5173`.
+
+Open **http://localhost:5173** and register an account to use the
+dashboard. To enable the AI incident summary, put a real key in
+`OPENAI_API_KEY` in `.env` before `docker compose up` -- leave it blank to
+use the non-LLM fallback (no key required for the system to work).
 
 **Postgres host port is `55432`, not `5432`** -- if your machine already
 runs a native Postgres on `5432` (common on macOS), it silently intercepts
@@ -233,6 +293,29 @@ curl -X POST localhost:8002/admin/faults -H 'Content-Type: application/json' \
 curl -X POST localhost:8002/admin/faults/reset
 ```
 
+### Management API, directly
+
+```bash
+curl -X POST localhost:8080/auth/register -H 'Content-Type: application/json' \
+  -d '{"username":"demo","password":"supersecret123"}'
+TOKEN=$(curl -s -X POST localhost:8080/auth/login -H 'Content-Type: application/json' \
+  -d '{"username":"demo","password":"supersecret123"}' | python3 -c "import json,sys;print(json.load(sys.stdin)['access_token'])")
+
+curl localhost:8080/incidents -H "Authorization: Bearer $TOKEN"
+curl localhost:8080/services/health -H "Authorization: Bearer $TOKEN"
+curl -N "localhost:8080/incidents/stream/live?token=$TOKEN"   # SSE
+```
+
+Full OpenAPI docs: http://localhost:8080/docs
+
+### Dashboard dev mode (hot reload, outside Docker)
+
+```bash
+cd dashboard
+npm install
+npm run dev   # http://localhost:5173, talks to the API at localhost:8080 by default
+```
+
 ### Inspecting incidents
 
 ```bash
@@ -244,8 +327,8 @@ PGPASSWORD=change-me-in-local-env psql -h localhost -p 55432 -U pulseops -d puls
 
 1. **Infra, demo services, OTel -> Kafka ingestion, smoke test.** Done.
 2. **Normalized event schema, Postgres persistence, idempotent consumer, DLQ wiring, recovery tests.** Done.
-3. **Anomaly detection, incident correlation, fault-injection evaluation harness.** Done (this README).
-4. Authenticated management API (JWT, rate limiting), React dashboard (SSE), optional AI incident summaries.
+3. **Anomaly detection, incident correlation, fault-injection evaluation harness.** Done.
+4. **Authenticated management API (JWT, rate limiting), React dashboard (SSE), optional AI incident summaries.** Done (this README).
 5. Full test/benchmark suite, CI, security checks, final docs.
 
 See `docs/ARCHITECTURE.md` for component detail and verified run transcripts,

@@ -138,6 +138,53 @@ services:
     restart: unless-stopped
     networks: [pulseops]
 
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    container_name: pulseops-api
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-pulseops}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-in-local-env}
+      POSTGRES_DB: ${POSTGRES_DB:-pulseops}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-me-in-local-env}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      JWT_ACCESS_TOKEN_EXPIRE_MINUTES: ${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-30}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5-nano}
+    ports:
+      - "${API_PORT:-8080}:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks: [pulseops]
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: dashboard/Dockerfile
+      args:
+        VITE_API_BASE: ${DASHBOARD_API_BASE:-http://localhost:8080}
+    container_name: pulseops-dashboard
+    ports:
+      - "${DASHBOARD_PORT:-5173}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    networks: [pulseops]
+
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.162.0
     container_name: pulseops-otel-collector

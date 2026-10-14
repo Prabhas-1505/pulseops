@@ -9,6 +9,8 @@ COPY services/__init__.py services/__init__.py
 COPY services/common services/common
 COPY processor processor
 COPY detector detector
+COPY api/__init__.py api/__init__.py
+COPY api/models.py api/models.py
 COPY alembic.ini alembic.ini
 
 CMD ["python", "-m", "processor.main"]

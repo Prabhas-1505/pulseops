@@ -1,0 +1,11 @@
+# Frozen via: python3.11 -m venv .venv && pip install <deps> && pip freeze
+# on 2026-10-14. Re-freeze with the same command if you need to bump versions.
+fastapi==0.143.0
+uvicorn[standard]==0.54.0
+pydantic==2.14.1
+SQLAlchemy==2.1.4
+psycopg[binary]==3.3.6
+PyJWT==2.15.1
+bcrypt==5.0.0
+redis==8.1.0
+openai==3.31.0

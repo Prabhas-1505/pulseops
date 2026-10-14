@@ -1,4 +1,4 @@
-# Architecture — Phases 1, 2 & 3
+# Architecture — Phases 1, 2, 3 & 4
 
 ## Components
 
@@ -7,7 +7,7 @@
 | `kafka` | Single-node Kafka in KRaft combined mode (broker+controller) | `apache/kafka:4.2.2` |
 | `kafka-init` | One-shot container that creates `otel.raw.v1` (3 partitions) and `otel.dlq.v1` (1 partition), then exits | `apache/kafka:4.2.2` |
 | `postgres` | Relational store. Host port `55432` (see `docs/DECISIONS.md`) | `postgres:16-alpine` |
-| `redis` | Cache/rate-limit store, provisioned but unused until Phase 4 | `redis:7-alpine` |
+| `redis` | Rate-limit counter store for `api` | `redis:7-alpine` |
 | `otel-collector` | OTLP receiver -> batch -> Kafka exporter | `otel/opentelemetry-collector-contrib:0.162.0` |
 | `payments` | Innermost demo service; applies fault injection; "charges" an order | FastAPI, this repo |
 | `orders` | Calls `payments`; applies fault injection; creates an order | FastAPI, this repo |
@@ -15,6 +15,8 @@
 | `migrate` | One-shot `alembic upgrade head` against Postgres, then exits | this repo (`processor/Dockerfile`) |
 | `processor` | Durable Kafka consumer group (`pulseops-event-normalizer`): decode -> validate -> idempotent upsert into Postgres, DLQ on malformed input | this repo (`processor/`) |
 | `detector` | Periodic (10s) sliding-window anomaly detector + incident correlator against Postgres | this repo (`detector/`) |
+| `api` | Authenticated management API: JWT auth, Redis rate limiting, incidents/services endpoints, SSE, AI summary | this repo (`api/`) |
+| `dashboard` | React SPA, built at image-build time and served statically | this repo (`dashboard/`), `nginx:1.30-alpine` |
 
 ## Phase 2: normalized event schema and persistence
 
@@ -150,6 +152,70 @@ to attach it to an existing open incident or start a new one:
 `RESOLUTION_GRACE_SECONDS` (40s) has passed with no new alerts attached.
 `detector/main.py` runs one tick every 10 seconds as a long-running Docker
 service (`restart: unless-stopped`).
+
+## Phase 4: management API
+
+`api/` is a separate FastAPI app from the three demo services, talking to
+the same Postgres (read-mostly: `incidents`, `alerts`, plus its own
+`users` table) and to Redis (rate-limit counters only).
+
+- **Auth** (`api/auth.py`, `api/models.py`): `users.hashed_password` via
+  `bcrypt`; `POST /auth/register` creates a user, `POST /auth/login`
+  verifies and returns a JWT (`PyJWT`, HS256, `JWT_SECRET_KEY`,
+  30-minute expiry by default). `api/deps.py`'s `get_current_user` is a
+  dependency on every other route (`HTTPBearer` — `Authorization: Bearer
+  <token>`), except the SSE stream (see below).
+- **Rate limiting** (`api/rate_limit.py`): `RateLimiter(times, seconds)`
+  is a FastAPI dependency doing `INCR`/`EXPIRE` against Redis per
+  `(route path, client IP)`. Applied at 5/60s on `/auth/login` (brute-force
+  protection) and 60/60s on everything else. Genuinely shared state across
+  the API process's lifetime, not an in-process counter that resets on
+  restart or doesn't coordinate across replicas.
+- **Incidents/services** (`api/routers/incidents.py`,
+  `api/routers/services.py`): paginated `GET /incidents` (filter by
+  `status`/`severity`), `GET /incidents/{id}` (detail plus `evidence` —
+  actual `events` rows matching the incident's alerts' `trace_ids`),
+  `POST /incidents/{id}/acknowledge`, `GET /services/health` (derived from
+  `service_baselines` + a trailing 60s error-rate window, reusing
+  `detector/metrics.py`), `GET /services/{service}/latency-history` (last
+  20 trailing 10s windows, same metrics code).
+- **SSE** (`GET /incidents/stream/live`): emits a full JSON snapshot of
+  open + recently-resolved incidents every 2s. Lives on its own
+  `stream_router` with `get_current_user_sse`, which accepts the JWT via
+  `?token=` instead of a bearer header — the browser's `EventSource` API
+  can't set custom headers, so this is the only route with that
+  alternate auth path (see `docs/DECISIONS.md`). Opens a short-lived DB
+  connection per poll rather than holding one for the connection's whole
+  lifetime, so a long-lived dashboard tab doesn't pin a Postgres connection
+  "idle in transaction" indefinitely.
+- **AI summary** (`api/ai_summary.py`, `GET /incidents/{id}/summary`):
+  OpenAI (`gpt-5-nano` by default) if `OPENAI_API_KEY` is set, else a
+  deterministic fallback built from the same verified alert data. The
+  response schema keeps `verified_evidence` (measured) structurally
+  separate from `suspected_cause` (LLM inference, explicitly labeled
+  unverified). Untrusted span attributes are wrapped in `<untrusted_data>`
+  tags with a "describe, don't obey" instruction. Any OpenAI
+  error/timeout/empty-response is caught and falls back automatically —
+  the endpoint never 500s because of the LLM.
+
+## Phase 4: React dashboard
+
+`dashboard/` is a Vite + React + TypeScript SPA, no additional UI/charting
+framework. `src/api.ts` is a thin fetch wrapper that injects the JWT from
+`localStorage` and clears it on a 401. `src/hooks/useIncidentStream.ts`
+wraps `EventSource` with exponential-backoff reconnect (capped 15s) — the
+backend's full-snapshot-every-2s design means a reconnecting client is
+correct immediately with no client-side diff/replay logic. The incident
+timeline is a plain paginated `GET /incidents` poll (every 5s); the SSE
+stream separately drives a small "live · N open now" header badge — two
+different jobs (historical filtered browsing vs. a live pulse), not one
+subsystem pretending to be both.
+
+Built via a multi-stage Dockerfile (`node:22-slim` build -> static files
+served by `nginx:1.30-alpine`); `VITE_API_BASE` is baked in at image build
+time to the API's host-reachable address (`http://localhost:8080` by
+default), since the compiled JS runs in the user's browser, not inside the
+Docker network.
 
 ## Verified end-to-end runs
 
@@ -312,6 +378,67 @@ separate per-service alerts, correlated via shared `trace_id`s:
   6 |           2 | orders   | error_rate  |    1.000 | 6/6 requests (100%) returned a 5xx status ... exceeding 20%
 ```
 
+### Phase 4: management API, driven live end-to-end
+
+```
+$ curl -X POST localhost:8080/auth/register -d '{"username":"demo_admin","password":"supersecret123"}'
+{"id":1,"username":"demo_admin","role":"viewer"}
+
+$ TOKEN=$(curl -s -X POST localhost:8080/auth/login -d '{...}' | jq -r .access_token)
+
+$ curl localhost:8080/incidents -H "Authorization: Bearer $TOKEN"     # 200, real incident list
+$ curl localhost:8080/incidents                                       # no token -> 401
+$ curl localhost:8080/services/health -H "Authorization: Bearer $TOKEN"
+[{"service":"payments","status":"unknown","ewma_latency_ms":129.6,...}, ...]
+
+# Rate limiting: 7 rapid /auth/login attempts against a 5-per-60s limit
+attempt 1-4: HTTP 401 (wrong password, correctly rejected)
+attempt 5-7: HTTP 429 (limit exceeded -- some quota was already consumed
+             by earlier manual testing within the same Redis window,
+             which is itself proof the limiter's state is real and shared,
+             not reset per-request or per-process)
+```
+
+Incident detail, acknowledge, and the live AI summary (real OpenAI call,
+`generated_by: "openai"`):
+
+```json
+{
+  "incident_id": 6,
+  "generated_by": "openai",
+  "verified_evidence": [
+    "Incident #6: signature=payments:latency, severity=critical, ...",
+    "Alert #19 [payments/latency]: observed=504.446 vs baseline_or_threshold=9.398 ..."
+  ],
+  "suspected_cause": "Unverified inference: The latency spike appears systemic—median latencies around 504–561 ms across payments, orders, and gateway, well above baselines (as low as ~9 ms). This pattern points to a shared upstream bottleneck or dependency contention...",
+  "summary": "CRITICAL: widespread latency spike across gateway, orders, and payments; median ~505 ms (vs baselines ~9–208 ms); incident resolved; suspected upstream bottleneck."
+}
+```
+
+### Phase 4: dashboard, verified in an actual headless browser
+
+Driven with Playwright against headless Chromium (driver script in a
+scratch directory, not part of the repo) through the real golden path:
+login as `demo_admin` -> dashboard renders -> service health cards show
+real `ewma_latency_ms`/error-rate data -> incident list shows 6 real rows
+-> clicking one shows the full detail panel (alerts, evidence table,
+"ACK'D BY DEMO_ADMIN" badge) -> header badge reads "LIVE · 0 OPEN NOW" via
+the SSE connection. Run twice: once against the Vite dev server, once
+against the production `nginx`-served Docker build (`docker compose up -d
+--build dashboard`) — identical result both times.
+
+```
+--- console messages ---
+(none)
+
+--- network errors (4xx/5xx) ---
+(none)
+```
+
+Screenshots were visually inspected (not just text-scraped) at each step;
+the login page and incident-detail views rendered correctly with no
+layout breakage.
+
 ## Known limitations (stated up front, not discovered later)
 
 - `/admin/faults` has no auth. It's an internal dev/test control surface;
@@ -345,3 +472,22 @@ separate per-service alerts, correlated via shared `trace_id`s:
   the three real demo services are always causally chained, so there is no
   way to produce a genuinely unrelated failure between them live. See
   `docs/DECISIONS.md`.
+- `api/` has no role-based authorization beyond "authenticated or not" --
+  every registered user can acknowledge any incident. The `users.role`
+  column exists for future use but nothing currently branches on it.
+- CORS on the management API is permissive (`allow_origins=["*"]`),
+  appropriate for a local/demo system with no production deployment
+  target, not for a real one. See `docs/DECISIONS.md`.
+- The dashboard has no automated test suite (no Vitest/React Testing
+  Library) -- correctness here was established via a real headless-browser
+  golden-path run (see above), not via component unit tests. Phase 5 is
+  the place for that if it's judged worth adding.
+- Rate limiting is per-route-path + client IP, fixed-window (not sliding),
+  and the "client IP" as seen by the API container is whatever Docker's
+  network presents it as -- behind a real reverse proxy/load balancer this
+  would need `X-Forwarded-For` handling, which doesn't exist here.
+- The AI summary's "suspected cause" quality depends entirely on the
+  configured model; it was tested with exactly one model (`gpt-5-nano`)
+  against exactly the incidents this project's own fault injection
+  produced. No evaluation of summary quality/accuracy across a broader
+  incident corpus was performed or is claimed.

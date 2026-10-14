@@ -1,0 +1,332 @@
+:root {
+  color-scheme: dark;
+  --bg: #0f1115;
+  --panel: #161922;
+  --border: #272c38;
+  --text: #e6e8ee;
+  --muted: #8a90a3;
+  --ok: #2fb170;
+  --warn: #d9a441;
+  --critical: #e5484d;
+  --unknown: #5b6170;
+  --accent: #5b8def;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.app {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+h1 {
+  font-size: 22px;
+  margin: 0;
+}
+
+h2 {
+  font-size: 16px;
+  margin: 0 0 12px;
+}
+
+h3 {
+  font-size: 14px;
+  color: var(--muted);
+  margin: 16px 0 8px;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: 16px;
+}
+
+@media (max-width: 860px) {
+  .split {
+    grid-template-columns: 1fr;
+  }
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.error {
+  color: var(--critical);
+  font-size: 13px;
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.badge.ok {
+  background: rgba(47, 177, 112, 0.15);
+  color: var(--ok);
+}
+
+.badge.warn {
+  background: rgba(217, 164, 65, 0.15);
+  color: var(--warn);
+}
+
+.badge.critical {
+  background: rgba(229, 72, 77, 0.15);
+  color: var(--critical);
+}
+
+.badge.unknown {
+  background: rgba(91, 97, 112, 0.2);
+  color: var(--unknown);
+}
+
+.badge.ack {
+  background: rgba(91, 141, 239, 0.15);
+  color: var(--accent);
+}
+
+/* --- Login --- */
+.login-card {
+  max-width: 360px;
+  margin: 15vh auto;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 28px;
+}
+
+.login-card form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.login-card label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+input {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  color: var(--text);
+  font-size: 14px;
+}
+
+button {
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 14px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+button.link {
+  background: none;
+  color: var(--accent);
+  padding: 4px 0;
+  margin-top: 8px;
+  text-decoration: underline;
+}
+
+select {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 13px;
+}
+
+/* --- Service health --- */
+.health-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.health-card {
+  text-align: left;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.health-card.selected {
+  border-color: var(--accent);
+}
+
+.health-card-title {
+  font-weight: 600;
+}
+
+.health-card-metric {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.health-card-metric.warn {
+  color: var(--warn);
+}
+
+/* --- Incident list --- */
+.filters {
+  display: flex;
+  gap: 8px;
+}
+
+.incident-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 480px;
+  overflow-y: auto;
+}
+
+.incident-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 6px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.incident-row:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.incident-row.selected {
+  background: rgba(91, 141, 239, 0.08);
+}
+
+.incident-signature {
+  font-weight: 600;
+}
+
+.incident-services {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* --- Incident detail --- */
+.alert-list {
+  padding-left: 18px;
+  font-size: 13px;
+}
+
+.evidence-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.evidence-table th,
+.evidence-table td {
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  padding: 6px 8px;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.small {
+  font-size: 11px;
+}
+
+.ai-summary {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  margin-top: 8px;
+}
+
+/* --- Latency chart --- */
+.latency-chart {
+  color: var(--accent);
+}
+
+.latency-chart-title {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.latency-chart-scale {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.footer-note {
+  text-align: right;
+}
