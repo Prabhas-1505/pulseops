@@ -87,6 +87,35 @@ def wait_until(predicate, timeout_s: float, interval_s: float = 1.0, description
     return False
 
 
+def wait_fully_settled(group: str, timeout_s: float = 60, quiet_period_s: float = 12, interval_s: float = 2) -> bool:
+    """True once consumer lag has been 0 continuously for `quiet_period_s`.
+
+    A single lag==0 reading only proves the consumer caught up to Kafka's
+    CURRENT high-water mark -- it says nothing about spans the OTel SDK's
+    BatchSpanProcessor (default ~5s export delay) hasn't flushed yet from a
+    preceding test phase. Those stragglers land in Kafka a few seconds
+    later and would otherwise be miscounted as "replay duplicates" by
+    scenario 1. Requiring lag to stay at 0 for a quiet period rules that
+    out -- confirmed necessary by reproducing this exact failure in CI,
+    where Phase 2 starts immediately after Phase 1 with no idle gap.
+    """
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        if consumer_group_total_lag(group) == 0:
+            quiet_start = time.monotonic()
+            stayed_quiet = True
+            while time.monotonic() - quiet_start < quiet_period_s:
+                time.sleep(interval_s)
+                if consumer_group_total_lag(group) != 0:
+                    stayed_quiet = False
+                    break
+            if stayed_quiet:
+                return True
+        else:
+            time.sleep(interval_s)
+    return False
+
+
 def consumer_group_total_lag(group: str) -> int | None:
     result = kafka_exec(
         "/opt/kafka/bin/kafka-consumer-groups.sh",
@@ -116,8 +145,8 @@ def scenario_replay_does_not_duplicate() -> None:
     # unconsumed, and replaying would then insert it as a genuinely NEW row
     # rather than a duplicate, which looks identical to a real dedup bug if
     # you don't rule it out first.
-    settled = wait_until(lambda: consumer_group_total_lag(CONSUMER_GROUP) == 0, timeout_s=30, interval_s=2)
-    check("processor settled (caught up) before snapshotting pre-replay row count", settled)
+    settled = wait_fully_settled(CONSUMER_GROUP)
+    check("processor settled (caught up, quiet for 12s) before snapshotting pre-replay row count", settled)
 
     before = db_count()
     print(f"rows before replay: {before}")
@@ -181,8 +210,8 @@ def scenario_replay_does_not_duplicate() -> None:
 
 def scenario_malformed_message_goes_to_dlq() -> None:
     print("\n=== Scenario 2: malformed message is dead-lettered, not dropped or blocking ===")
-    settled = wait_until(lambda: consumer_group_total_lag(CONSUMER_GROUP) == 0, timeout_s=30, interval_s=2)
-    check("processor settled (caught up) before injecting the poison pill", settled)
+    settled = wait_fully_settled(CONSUMER_GROUP)
+    check("processor settled (caught up, quiet for 12s) before injecting the poison pill", settled)
 
     marker = f"garbage-{uuid.uuid4().hex[:8]}".encode()
     producer = Producer({"bootstrap.servers": KAFKA_BOOTSTRAP})
